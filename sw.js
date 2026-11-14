@@ -1,6 +1,6 @@
 // Network-first so updates you push show up immediately;
 // falls back to cache so the shell still opens with no signal (e.g. in a garage).
-const CACHE = 'bayscope-v2';
+const CACHE = 'bayscope-v3';
 const ASSETS = [
   './',
   './index.html',

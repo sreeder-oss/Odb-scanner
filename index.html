@@ -103,7 +103,8 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
     <span class="badge" id="profileBadge"></span>
   </div>
   <div class="controls-bar">
-    <button class="primary" id="btConnectBtn" data-act="connect">Connect adapter</button>
+    <button class="primary" id="btConnectBtn" data-act="connect" title="Bluetooth Low Energy adapters">Connect (Bluetooth LE)</button>
+    <button id="serConnectBtn" data-act="connectSerial" title="Cheap Bluetooth Classic ELM327 clones (paired in your device settings) and USB cables">Connect (Classic / USB)</button>
     <button id="simBtn" data-act="sim">Start Sim</button>
   </div>
 </header>
@@ -132,6 +133,7 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
     <select id="quickPreset" title="Load a scan target"></select>
     <span class="muted" id="slotCount"></span>
     <span class="muted" id="rateInfo"></span>
+    <input id="evtLabel" placeholder="What just happened? (stumble, noise…)" style="width:230px" autocomplete="off"><button data-act="mark" title="Drops a marker into the recording at this moment">Mark moment</button>
   </div>
   <div class="dashboard-grid" id="grid"></div>
   <div class="chart-box">
@@ -169,7 +171,13 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
     <label>Transmission<select id="selTrans"></select></label>
   </div>
   <div class="panel" id="profileSummary"></div>
+  <div class="panel" id="sessionPanel">
+    <h3 style="margin-top:0">This session</h3>
+    <div class="form-grid"><label>What are you doing?<select id="setPurpose"><option value="own">Troubleshooting my own vehicle</option><option value="buy">Evaluating a vehicle to buy</option></select></label></div>
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:.78rem;color:var(--muted)">Notes (go into the export and AI prompt)<textarea id="sessNotes" rows="3"></textarea></label>
+  </div>
   <div class="panel" id="carInfo"></div>
+  <div class="panel" id="garage"></div>
   <div class="note info">The VIN identifies the make and a likely model year. Engine and transmission can't be decoded reliably from a VIN, so pick them above.</div>
   <div class="note info">Your dashboard layout is remembered separately for each manufacturer / engine / transmission combination.</div>
 </section>
@@ -272,7 +280,7 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 <!-- ABOUT -->
 <section class="view" id="view-about">
   <h2>About BayScope</h2>
-  <p>A single-page OBD-II dashboard for Toyota, Nissan, and generic vehicles. It talks to a Bluetooth LE ELM327-compatible adapter through Web Bluetooth, so it needs Chrome or Edge (desktop) or Chrome on Android, over HTTPS.</p>
+  <p>A single-page OBD-II dashboard for Toyota, Nissan, and generic vehicles. It talks to an ELM327-compatible adapter straight from the browser: Bluetooth LE adapters through Web Bluetooth, and cheap Bluetooth Classic clones or USB cables through Web Serial (paired in your device's Bluetooth settings first). It needs Chrome or Edge over HTTPS — desktop, or Chrome on Android. WiFi adapters cannot work from a web page.</p>
   <div class="note"><b>Read this before trusting it in a car.</b> The standard-PID read path, the supported-PID scan, the VIN / readiness read, and the code reader are implemented but were written without access to a physical adapter. Try it on a parked car first and compare against a known-good tool. Anything marked <i>est.</i> or <i>unverified</i> is an estimate or unconfirmed on real vehicles.</div>
   <p class="muted">Simulation mode generates plausible data with no car attached — everything it shows is fake, and exports from it are labelled as such.</p>
 </section>
@@ -482,21 +490,22 @@ const S = {
   units: 'imperial', pollMs: 0, showAll: false,
   layouts: {}, chartKeys: [], custom: [],
   slots: [], mode: 'idle', supported: null,
-  values: {}, stats: {}, history: [], dtcs: [], dtcSource: '', info: null,
+  values: {}, stats: {}, history: [], dtcs: [], dtcSource: '', info: null, purpose: 'own', notes: '', garage: [], events: [], pendingEv: [],
 };
 const STORE = 'bayscope.v1';
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ make: S.make, engine: S.engine, trans: S.trans, units: S.units, pollMs: S.pollMs, showAll: S.showAll, layouts: S.layouts, chartKeys: S.chartKeys, custom: S.custom })); } catch (e) {}
+  try { localStorage.setItem(STORE, JSON.stringify({ make: S.make, engine: S.engine, trans: S.trans, units: S.units, pollMs: S.pollMs, showAll: S.showAll, layouts: S.layouts, chartKeys: S.chartKeys, custom: S.custom, purpose: S.purpose, notes: S.notes, garage: S.garage })); } catch (e) {}
 }
 function load() {
   try {
     const o = JSON.parse(localStorage.getItem(STORE) || 'null'); if (!o) return;
-    for (const k of ['make', 'engine', 'trans', 'units', 'pollMs', 'showAll', 'layouts', 'chartKeys', 'custom']) if (o[k] !== undefined) S[k] = o[k];
+    for (const k of ['make', 'engine', 'trans', 'units', 'pollMs', 'showAll', 'layouts', 'chartKeys', 'custom', 'purpose', 'notes', 'garage']) if (o[k] !== undefined) S[k] = o[k];
   } catch (e) {}
   if (!MAKES[S.make]) S.make = 'TOYOTA';
   if (!MAKES[S.make].engines[S.engine]) S.engine = Object.keys(MAKES[S.make].engines)[0];
   if (!MAKES[S.make].trans[S.trans]) S.trans = Object.keys(MAKES[S.make].trans)[0];
   if (!Array.isArray(S.custom)) S.custom = [];
+  if (!Array.isArray(S.garage)) S.garage = []; S.garage = S.garage.filter(g => g && MAKES[g.make]); if (S.purpose !== 'buy') S.purpose = 'own'; if (typeof S.notes !== 'string') S.notes = '';
 }
 const profKey = () => `${S.make}|${S.engine}|${S.trans}`;
 const curEngine = () => MAKES[S.make].engines[S.engine];
@@ -658,7 +667,7 @@ function finishCycle() {
   computeDerived(); updateCards(); pushChart();
   const row = { ts: new Date().toISOString(), sim: S.mode === 'sim', vals: {} };
   let n = 0; for (const k of S.slots) { const x = S.values[k]; if (x) { row.vals[k] = x.v; n++; } }
-  if (n) { S.history.push(row); if (S.history.length > 20000) S.history.shift(); }
+  if (n) { if (S.pendingEv.length) row.ev = S.pendingEv.splice(0).join('; '); S.history.push(row); if (S.history.length > 20000) S.history.shift(); }
   const now = performance.now(); cycleTimes.push(now); cycleTimes = cycleTimes.filter(t => now - t < 5000);
   if (cycleTimes.length > 2) $('rateInfo').textContent = `refresh ≈ ${((cycleTimes.length - 1) / ((now - cycleTimes[0]) / 1000)).toFixed(1)} Hz`;
   if ($('view-data').classList.contains('active')) renderHistInfo();
@@ -693,7 +702,7 @@ function simTick() {
   for (const k of pollKeys()) { const d = getDef(k); if (d && !d.derived) setValue(k, simVal(d, simT)); }
   finishCycle();
 }
-function newSession() { S.history = []; S.stats = {}; S.values = {}; S.dtcs = []; S.dtcSource = ''; S.supported = null; S.info = null; cycleTimes = []; $('rateInfo').textContent = ''; renderDtc(); renderCarInfo(); }
+function newSession() { S.history = []; S.stats = {}; S.values = {}; S.dtcs = []; S.dtcSource = ''; S.supported = null; S.info = null; S.events = []; S.pendingEv = []; cycleTimes = []; $('rateInfo').textContent = ''; renderDtc(); renderCarInfo(); }
 function startSim() {
   if (S.mode === 'live') { toast('Disconnect the adapter first.', true); return; }
   newSession(); S.mode = 'sim'; simT = 0; S.info = simInfo(); renderCarInfo();
@@ -709,23 +718,24 @@ function stopSim() {
 
 /* ───────────── adapter link (Web Bluetooth + ELM327 command set) ───────────── */
 const BLE_SERVICES = [0xFFE0, 0xFFF0, 0x18F0, 0xAE00, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000fff0-0000-1000-8000-00805f9b34fb'];
-const L = { dev: null, tx: null, rx: null, buf: '', pending: null, q: Promise.resolve(), hdr: '7DF', run: false, nd: {}, cycle: 0, timeouts: 0 };
+const L = { kind: null, dev: null, tx: null, rx: null, port: null, reader: null, writer: null, buf: '', pending: null, q: Promise.resolve(), hdr: '7DF', run: false, nd: {}, cycle: 0, timeouts: 0 };
 const enc = new TextEncoder(), dec = new TextDecoder();
-function onRx(e) {
-  L.buf += dec.decode(e.target.value);
-  const i = L.buf.indexOf('>');
+function feed(text) {
+  L.buf += text; const i = L.buf.indexOf('>');
   if (i >= 0 && L.pending) { const raw = L.buf.slice(0, i); L.buf = L.buf.slice(i + 1); const p = L.pending; L.pending = null; clearTimeout(p.timer); p.resolve(raw); }
 }
+function onRx(e) { feed(dec.decode(e.target.value)); }
 function rawSend(cmd, timeout) {
   return new Promise((resolve, reject) => {
-    if (!L.tx) return reject(new Error('not connected'));
+    if (!L.kind) return reject(new Error('not connected'));
     L.buf = '';
     L.pending = { resolve, timer: setTimeout(() => { L.pending = null; reject(new Error('timeout')); }, timeout) };
     log('→ ' + cmd, 'tx');
     (async () => {
       try {
-        const data = enc.encode(cmd + '\r'); const noResp = L.tx.properties.writeWithoutResponse;
-        for (let o = 0; o < data.length; o += 20) { const chunk = data.slice(o, o + 20); if (noResp) await L.tx.writeValueWithoutResponse(chunk); else await L.tx.writeValue(chunk); }
+        const data = enc.encode(cmd + '\r');
+        if (L.kind === 'serial') await L.writer.write(data);
+        else { const noResp = L.tx.properties.writeWithoutResponse; for (let o = 0; o < data.length; o += 20) { const chunk = data.slice(o, o + 20); if (noResp) await L.tx.writeValueWithoutResponse(chunk); else await L.tx.writeValue(chunk); } }
       } catch (e) { clearTimeout(L.pending && L.pending.timer); L.pending = null; reject(e); }
     })();
   });
@@ -779,29 +789,60 @@ async function readSupported() {
   S.supported = sup; log(`Car reports ${sup.size} standard variables.`); renderVariables(); updateCards();
   toast(`Your car reports ${sup.size} standard variables.`);
 }
-async function connectLive() {
-  if (!navigator.bluetooth) { toast('Web Bluetooth is not available here. Use Chrome or Edge (desktop) or Chrome on Android.', true); return; }
+async function openBle() {
+  if (!navigator.bluetooth) throw new Error('Web Bluetooth is not available here. Use Chrome or Edge (desktop) or Chrome on Android — or try the "Classic / USB" button for a cheap clone.');
+  log('Choose your adapter in the pairing prompt…');
+  const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
+  L.dev = dev; dev.addEventListener('gattserverdisconnected', () => { if (S.mode === 'live' && L.dev === dev) { log('Adapter dropped the connection.', 'err'); teardown(); } });
+  log(`Connecting to ${dev.name || 'adapter'}…`);
+  const server = await dev.gatt.connect();
+  const services = await server.getPrimaryServices(); let pick = null, fb = { rx: null, tx: null };
+  for (const sv of services) {
+    let rx = null, tx = null; for (const c of await sv.getCharacteristics()) { const p = c.properties; if (!rx && (p.notify || p.indicate)) rx = c; if (!tx && (p.write || p.writeWithoutResponse)) tx = c; }
+    if (rx && tx && !pick) pick = { rx, tx }; fb.rx = fb.rx || rx; fb.tx = fb.tx || tx;
+  }
+  pick = pick || (fb.rx && fb.tx ? fb : null);
+  if (!pick) throw new Error('No serial-style (notify + write) characteristic on this device. It is probably a Bluetooth Classic adapter — use the "Classic / USB" button instead.');
+  L.rx = pick.rx; L.tx = pick.tx; await L.rx.startNotifications(); L.rx.addEventListener('characteristicvaluechanged', onRx); L.kind = 'ble';
+}
+function startSerialIO(port) {
+  L.reader = port.readable.getReader(); L.writer = port.writable.getWriter(); const reader = L.reader;
+  (async () => {
+    try { for (;;) { const { value, done } = await reader.read(); if (done) break; if (value) feed(dec.decode(value)); } } catch (e) {}
+    if (S.mode === 'live' && L.port === port) { log('Adapter dropped the connection.', 'err'); teardown(); }
+  })();
+}
+async function closeSerialIO(port) {
+  const { reader, writer } = L; L.reader = L.writer = null;
+  try { await reader.cancel(); } catch (e) {} try { reader.releaseLock(); } catch (e) {} try { writer.releaseLock(); } catch (e) {} try { await port.close(); } catch (e) {}
+}
+async function openSerial() {
+  if (!navigator.serial) throw new Error('Web Serial is not available here. Use a recent Chrome or Edge (desktop or Android), over HTTPS.');
+  log('Choose your adapter. Bluetooth adapters must already be paired in your device\'s Bluetooth settings (PIN is usually 1234 or 0000).');
+  const port = await navigator.serial.requestPort(); L.port = port;
+  for (const baud of [38400, 115200, 9600]) {      // baud rate only matters for USB cables; Bluetooth ignores it
+    await port.open({ baudRate: baud }); startSerialIO(port); L.kind = 'serial'; L.buf = ''; L.q = Promise.resolve();
+    try { const t = await sendCmd('ATZ', 4500); if (/[A-Za-z]{3,}/.test(t.join(' '))) { log(`Serial link up (${baud} baud).`); return; } } catch (e) { /* try the next speed */ }
+    await closeSerialIO(port); L.kind = null;
+  }
+  L.port = null; throw new Error('The adapter did not answer. Is it plugged into the car, and (for Bluetooth) paired in your device settings?');
+}
+async function connectLive(kind) {
   if (S.mode === 'sim') stopSim();
+  L.q = Promise.resolve(); L.buf = ''; L.pending = null;
   try {
-    log('Choose your adapter in the pairing prompt…');
-    const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
-    L.dev = dev; dev.addEventListener('gattserverdisconnected', () => { if (S.mode === 'live') { log('Adapter dropped the connection.', 'err'); teardown(); } });
-    log(`Connecting to ${dev.name || 'adapter'}…`);
-    const server = await dev.gatt.connect();
-    const services = await server.getPrimaryServices(); let pick = null, fb = { rx: null, tx: null };
-    for (const s of services) {
-      let rx = null, tx = null; for (const c of await s.getCharacteristics()) { const p = c.properties; if (!rx && (p.notify || p.indicate)) rx = c; if (!tx && (p.write || p.writeWithoutResponse)) tx = c; }
-      if (rx && tx && !pick) pick = { rx, tx }; fb.rx = fb.rx || rx; fb.tx = fb.tx || tx;
-    }
-    pick = pick || (fb.rx && fb.tx ? fb : null);
-    if (!pick) throw new Error('No serial-style (notify + write) characteristic found on this device. It may be a Bluetooth Classic-only adapter, which Web Bluetooth cannot use.');
-    L.rx = pick.rx; L.tx = pick.tx; await L.rx.startNotifications(); L.rx.addEventListener('characteristicvaluechanged', onRx);
+    if (kind === 'serial') await openSerial(); else await openBle();
     L.hdr = '7DF'; L.nd = {}; L.cycle = 0; L.timeouts = 0; L.q = Promise.resolve();
     newSession(); S.mode = 'live'; setUI();
     for (const c of ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0']) await sendCmd(c, c === 'ATZ' ? 6000 : 3000);
+    try { log('Adapter: ' + (await sendCmd('ATI')).join(' ')); } catch (e) {}
     log('Looking for the car\'s protocol (can take several seconds; ignition must be ON)…');
-    const t = await sendCmd('0100', 15000); const r = toMessages(t);
-    if (r.err || !r.msgs.some(x => x.startsWith('4100'))) throw new Error('The car did not answer (' + (r.err || 'no reply') + '). Is the ignition on and the adapter fully seated?');
+    let ok = false, last = 'no reply';
+    for (let attempt = 0; attempt < 2 && !ok; attempt++) {      // cheap clones often miss the first search
+      if (attempt) { log('No answer yet — trying once more…'); await sleep(1500); }
+      const r = toMessages(await sendCmd('0100', 15000)); ok = !r.err && r.msgs.some(x => x.startsWith('4100')); last = r.err || 'no reply';
+    }
+    if (!ok) throw new Error('The car did not answer (' + last + '). Is the ignition on and the adapter fully seated?');
     try { log('Protocol: ' + (await sendCmd('ATDP')).join(' ')); log('Adapter voltage: ' + (await sendCmd('ATRV')).join(' ')); } catch (e) {}
     toast('Connected. Reading vehicle info…');
     try { await readSupported(); } catch (e) { log('Supported-PID read failed: ' + e.message, 'err'); }
@@ -817,7 +858,8 @@ async function connectLive() {
 function teardown() {
   L.run = false; try { if (L.rx) L.rx.removeEventListener('characteristicvaluechanged', onRx); } catch (e) {}
   try { if (L.dev && L.dev.gatt.connected) L.dev.gatt.disconnect(); } catch (e) {}
-  L.dev = L.rx = L.tx = null; if (S.mode === 'live') S.mode = 'idle'; setUI();
+  const port = L.port; L.port = null; if (port) closeSerialIO(port);
+  L.dev = L.rx = L.tx = null; L.kind = null; if (S.mode === 'live') S.mode = 'idle'; setUI();
 }
 async function pollLoop() {
   if (L.run) return; L.run = true;
@@ -905,7 +947,9 @@ async function readVehicleInfo() {
   if (I.vin) {
     I.vinInfo = decodeVin(I.vin); log('VIN: ' + I.vin + ' — ' + I.vinInfo.summary);
     const want = I.vinInfo.maker === 'Toyota' ? 'TOYOTA' : I.vinInfo.maker === 'Nissan' ? 'NISSAN' : I.vinInfo.maker ? 'GENERIC' : null;
-    if (want && want !== S.make) {                      // switch profile but keep the dashboard the user already set up
+    const mine = S.garage.find(g => g.vin === I.vin);
+    if (mine) { I.garageName = mine.name; changeProfile(mine.make, mine.engine, mine.trans); toast(`Recognised “${mine.name}” — profile loaded.`); }
+    else if (want && want !== S.make) {                      // switch profile but keep the dashboard the user already set up
       const keep = S.slots.slice(); changeProfile(want);
       S.slots = keep.filter(k => getDef(k)); commitLayout();
       toast(`VIN says ${I.vinInfo.maker} — profile switched to ${MAKES[want].name}. Pick the engine/transmission, then re-load a scan target.`);
@@ -921,17 +965,21 @@ async function readVehicleInfo() {
   if (S.mode === 'live') await scanDtc(null, true);
 }
 function carFlags(I) {
-  const f = [], nr = (I.monitors || []).filter(m => !m.ready).map(m => m.name);
+  const f = [], buy = S.purpose === 'buy', nr = (I.monitors || []).filter(m => !m.ready).map(m => m.name);
   if (I.mil) f.push('The check-engine light (MIL) is on.');
   if (I.distMil > 0) f.push(`The car has been driven ${I.distMil} km with the MIL on.`);
   const recent = (I.distClr !== null && I.distClr < 160) || (I.warmups !== null && I.warmups <= 5);
-  if (recent) f.push(`Codes / ECU memory appear to have been reset recently (${[I.distClr !== null ? I.distClr + ' km' : null, I.warmups !== null ? I.warmups + ' warm-up cycles' : null].filter(Boolean).join(' and ')} since). That is normal after a repair or battery disconnect, but it is also a way to hide a fault — ask the seller why.`);
-  if (nr.length >= 2) f.push(`${nr.length} readiness monitors are not ready (${nr.join(', ')}). A shop can't emissions-test it yet, and it often follows a code clear.`);
+  if (recent) f.push(`Codes / ECU memory appear to have been reset recently (${[I.distClr !== null ? I.distClr + ' km' : null, I.warmups !== null ? I.warmups + ' warm-up cycles' : null].filter(Boolean).join(' and ')} since). ` +
+    (buy ? 'That is normal after a repair or battery disconnect, but it is also a way to hide a fault — ask the seller why.' : 'Expected if codes were just cleared or the battery was disconnected; any fault that returns will need a few drive cycles to show again.'));
+  if (nr.length >= 2) f.push(`${nr.length} readiness monitors are not ready (${nr.join(', ')}). ` + (buy ? "A shop can't emissions-test it yet, and it often follows a code clear." : 'Normal for a while after a code clear or battery disconnect; they complete over several drive cycles.'));
   return f;
 }
 function describeInfo() {
   const I = S.info, m = MAKES[S.make], out = [];
+  out.push('Purpose: ' + (S.purpose === 'buy' ? 'evaluating a vehicle I am thinking of buying (test drive)' : 'troubleshooting my own vehicle'));
+  const nt = S.notes.replace(/\s+/g, ' ').trim(); if (nt) out.push('Notes from me: ' + nt);
   out.push(`Vehicle profile in app: ${m.name}, ${curEngine().name}, ${m.trans[S.trans]} (engine and transmission are chosen by the user, not read from the car)`);
+  if (I && I.garageName) out.push('Saved vehicle: ' + I.garageName);
   if (!I) out.push('VIN, readiness and reset history: not read');
   else {
     if (I.sim) out.push('WARNING: the vehicle info below is SIMULATED');
@@ -943,6 +991,7 @@ function describeInfo() {
     if (I.distMil !== null) out.push(`Distance driven with MIL on: ${I.distMil} km`);
   }
   out.push('Trouble codes: ' + (S.dtcSource ? (S.dtcs.length ? S.dtcs.map(d => `${d.code} ${d.kind.toLowerCase()} (${DTC[d.code] || 'not in built-in list'})`).join('; ') : 'none reported') + ' — ' + S.dtcSource : 'not read this session'));
+  if (S.events.length && S.history.length) { const t0 = Date.parse(S.history[0].ts); out.push('Moments I marked while driving (seconds from start of log): ' + S.events.slice(0, 30).map(e => `${Math.max(0, (Date.parse(e.ts) - t0) / 1000).toFixed(0)}s "${e.label.replace(/"/g, "'")}"`).join(', ')); }
   if (I) carFlags(I).forEach(x => out.push('NOTE: ' + x));
   return out;
 }
@@ -1065,6 +1114,27 @@ function renderCustom() {
   const l = S.custom; $('customList').innerHTML = l.length ? l.map(c => `<div class="picker-row"><div><div class="nm">${esc(c.name)} <span class="tag">${esc(c.tag)}</span></div><div class="muted">hdr ${esc(c.header || '7DF')} · req ${esc(c.req)} · ${esc(c.formula)} ${esc(c.unit)}</div></div>
     <div><button data-editc="${esc(c.id)}">Edit</button> <button class="danger" data-delc="${esc(c.id)}">Delete</button></div></div>`).join('') : '<p class="muted">None yet.</p>';
 }
+function renderSession() {
+  $('setPurpose').value = S.purpose; $('sessNotes').value = S.notes;
+  $('sessNotes').placeholder = S.purpose === 'buy' ? 'Asking price, mileage, what the seller says about its history, anything you noticed…' : 'Symptoms: what it does and when (cold start, hot idle, under load at 45 mph…), recent repairs, codes you have seen…';
+}
+function renderGarage() {
+  const el = $('garage'); if (!el) return; const vin = S.info && S.info.vin;
+  el.innerHTML = '<h3 style="margin-top:0">My vehicles</h3>' + (S.garage.length ? S.garage.map(g => `<div class="picker-row"><div><div class="nm">${esc(g.name)}</div><div class="muted">${esc(MAKES[g.make].name)} · ${esc(g.engine)} · ${esc(g.trans)}${g.vin ? ' · VIN ' + esc(g.vin) : ''}</div></div><div><button data-usev="${esc(g.id)}">Use</button> <button class="danger" data-delv="${esc(g.id)}">Delete</button></div></div>`).join('')
+    : '<p class="muted">None saved. Save the current profile (and the VIN, if it was read) and BayScope will recognise the car and load its settings when you connect.</p>')
+    + `<div class="toolbar" style="margin-top:.6rem"><input id="gName" placeholder="Name, e.g. Daily Camry" style="flex:1;min-width:180px"><button class="primary" data-act="saveVehicle">Save current vehicle${vin ? ' (with VIN)' : ''}</button></div>`;
+}
+function saveVehicle() {
+  const name = $('gName').value.trim(); if (!name) return toast('Give the vehicle a name.', true);
+  const vin = S.info && S.info.vin ? S.info.vin : '', i = vin ? S.garage.findIndex(g => g.vin === vin) : -1;
+  const g = { id: i >= 0 ? S.garage[i].id : 'v' + Date.now().toString(36), name, vin, make: S.make, engine: S.engine, trans: S.trans };
+  if (i >= 0) S.garage[i] = g; else S.garage.push(g);
+  save(); renderGarage(); toast(`Saved “${name}”.`);
+}
+function markEvent() {
+  if (S.mode !== 'live' && S.mode !== 'sim') return toast('Start recording first — connect an adapter or Start Sim.', true);
+  const el = $('evtLabel'), label = el.value.trim() || 'mark'; S.pendingEv.push(label); S.events.push({ ts: new Date().toISOString(), label }); el.value = ''; toast('Marked: ' + label); log('MARK: ' + label);
+}
 let editingId = null;
 function fillCustomForm(c) {
   $('cName').value = c.name || ''; $('cShort').value = c.short || ''; $('cUnit').value = c.unit || ''; $('cTag').value = c.tag || 'engine';
@@ -1087,13 +1157,13 @@ function showView(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + v));
   document.querySelectorAll('#drawer [data-view]').forEach(b => b.classList.toggle('cur', b.dataset.view === v));
   $('drawer').classList.remove('open'); $('scrim').classList.remove('open');
-  if (v === 'variables') renderVariables(); if (v === 'codes') renderDtc(); if (v === 'vehicle') renderCarInfo(); if (v === 'data') renderHistInfo();
+  if (v === 'variables') renderVariables(); if (v === 'codes') renderDtc(); if (v === 'vehicle') { renderCarInfo(); renderGarage(); renderSession(); } if (v === 'data') renderHistInfo();
   if (v === 'settings') { $('setUnits').value = S.units; $('setPoll').value = S.pollMs; $('setShowAll').checked = S.showAll; }
   if (v === 'dashboard' && chart) chart.resize();
   try { history.replaceState(null, '', '#' + v); } catch (e) {}
 }
 function setUI() {
-  const btn = $('btConnectBtn'); btn.textContent = S.mode === 'live' ? 'Disconnect' : 'Connect adapter'; btn.classList.toggle('active', S.mode === 'live');
+  const btn = $('btConnectBtn'); btn.textContent = S.mode === 'live' ? 'Disconnect' : 'Connect (Bluetooth LE)'; $('serConnectBtn').style.display = S.mode === 'live' ? 'none' : ''; btn.classList.toggle('active', S.mode === 'live');
   $('readSupBtn').disabled = S.mode !== 'live'; updateCards(); renderVariables();
 }
 
@@ -1111,9 +1181,10 @@ function buildCsv() {
     `Samples: ${S.history.length} over ${dur.toFixed(0)} s${dur > 0 ? ` (~${(S.history.length / dur).toFixed(1)} per second)` : ''}`,
     `Values use ${S.units} units; units are in the column headers. Empty cell = car did not answer for that variable.`,
     'Lines starting with # are notes — skip them when parsing (e.g. pandas read_csv comment="#").'];
-  const head = ['timestamp', 'elapsed_s', 'simulated', ...keys.map(k => { const d = getDef(k); return d ? `${d.name} (${disp(d, d.min).unit})` : k; })];
+  const hasEv = S.history.some(r => r.ev);
+  const head = ['timestamp', 'elapsed_s', 'simulated', ...keys.map(k => { const d = getDef(k); return d ? `${d.name} (${disp(d, d.min).unit})` : k; }), ...(hasEv ? ['event'] : [])];
   const q = (x) => /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x;
-  const rows = S.history.map(r => [r.ts, ((Date.parse(r.ts) - t0) / 1000).toFixed(1), r.sim ? 'yes' : 'no', ...keys.map(k => { const d = getDef(k); return (r.vals[k] === undefined || !d) ? '' : fmt(d, r.vals[k]).text; })].map(q).join(','));
+  const rows = S.history.map(r => [r.ts, ((Date.parse(r.ts) - t0) / 1000).toFixed(1), r.sim ? 'yes' : 'no', ...keys.map(k => { const d = getDef(k); return (r.vals[k] === undefined || !d) ? '' : fmt(d, r.vals[k]).text; }), ...(hasEv ? [r.ev || ''] : [])].map(q).join(','));
   return [...meta.map(l => '# ' + l), head.map(q).join(','), ...rows].join('\n');
 }
 function exportCSV() {
@@ -1122,18 +1193,25 @@ function exportCSV() {
   download(`bayscope_${tag}_${new Date().toISOString().slice(0, 10)}.csv`, text, 'text/csv;charset=utf-8'); log('CSV exported.');
 }
 function aiPrompt() {
-  const sim = S.history.some(r => r.sim), dur = S.history.length > 1 ? (Date.parse(S.history[S.history.length - 1].ts) - Date.parse(S.history[0].ts)) / 1000 : 0;
-  let t = '### Used-vehicle test-drive data (OBD-II, from BayScope)\n';
+  const sim = S.history.some(r => r.sim), buy = S.purpose === 'buy', dur = S.history.length > 1 ? (Date.parse(S.history[S.history.length - 1].ts) - Date.parse(S.history[0].ts)) / 1000 : 0;
+  let t = buy ? '### Used-vehicle test-drive data (OBD-II, from BayScope)\n' : '### Vehicle troubleshooting data (OBD-II, from BayScope)\n';
   if (sim) t += '- WARNING: this session includes SIMULATED data, not a real vehicle.\n';
   describeInfo().forEach(l => t += '- ' + l + '\n');
   t += `- Samples: ${S.history.length}${dur ? ` over ${dur.toFixed(0)} s` : ''}\n- Variable statistics (min / avg / max):\n`;
   for (const [k, st] of Object.entries(S.stats)) { const d = getDef(k); if (!d || !st.n) continue; const a = fmt(d, st.min), b = fmt(d, st.sum / st.n), c = fmt(d, st.max); t += `  - ${d.name}: ${a.text} / ${b.text} / ${c.text} ${a.unit}\n`; }
-  t += "\nI'm deciding whether to buy this vehicle and how to negotiate. The attached CSV is the time-series from the test drive (lines starting with # are notes). Please:\n"
+  if (buy) t += "\nI'm deciding whether to buy this vehicle and how to negotiate. The attached CSV is the time-series from the test drive (lines starting with # are notes). Please:\n"
     + '1. Flag readings that look abnormal for this engine and transmission — fuel trims, coolant warm-up and thermostat behaviour, idle/misfire stability, voltage, and RPM÷speed changes that suggest slip.\n'
     + '2. Say what the trouble-code, readiness and "since codes cleared" data suggest, including whether codes may have been cleared recently.\n'
     + '3. Give an overall risk assessment, and list specific things to inspect, ask the seller, or have a shop check.\n'
     + '4. Suggest negotiation points that follow from the data, and say which findings should make me walk away.\n'
     + 'Be explicit about uncertainty: OBD data cannot confirm mechanical condition, a short test drive can miss intermittent faults, and some values are estimates.';
+  else t += "\nI'm troubleshooting my own vehicle. The attached CSV is the log (lines starting with # are notes; the \"event\" column, if present, marks moments I flagged while driving). Please:\n"
+    + '1. Describe what the data shows around the symptom and any marked moments, and anything else that looks abnormal for this engine and transmission — fuel trims, coolant/thermostat behaviour, idle and misfire stability, voltage, RPM÷speed changes that suggest slip.\n'
+    + '2. List the most likely causes, ranked, with what in the data supports or argues against each.\n'
+    + '3. Give the next diagnostic steps in order — cheapest and most informative first — including tests that would confirm or rule out each cause.\n'
+    + '4. Tell me what to log next time (variables, conditions, drive pattern) to narrow it down.\n'
+    + '5. Say whether it looks safe to keep driving.\n'
+    + 'Be explicit about uncertainty: OBD data points toward causes but does not prove them, and some values are estimates.';
   return t;
 }
 async function copyAI() {
@@ -1141,20 +1219,21 @@ async function copyAI() {
   try { await navigator.clipboard.writeText(t); toast('Copied. Paste it into your AI chat.'); }
   catch (e) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Copied.'); } catch (x) { toast('Copy failed.', true); } ta.remove(); }
 }
-function exportCfg() { download('bayscope-settings.json', JSON.stringify({ app: 'bayscope', version: 1, custom: S.custom, layouts: S.layouts, units: S.units }, null, 1), 'application/json'); }
+function exportCfg() { download('bayscope-settings.json', JSON.stringify({ app: 'bayscope', version: 1, custom: S.custom, layouts: S.layouts, units: S.units, garage: S.garage }, null, 1), 'application/json'); }
 function importCfg(text) {
   try {
     const o = JSON.parse(text); if (o.app !== 'bayscope') throw new Error('not a BayScope file');
     const custom = (o.custom || []).filter(c => c && typeof c.id === 'string' && typeof c.name === 'string' && /^([0-9A-F]{2}){1,6}$/i.test(c.req || ''));
     custom.forEach(c => compileExpr(c.formula));
     S.custom = custom; S.layouts = (o.layouts && typeof o.layouts === 'object') ? o.layouts : {}; if (o.units === 'metric' || o.units === 'imperial') S.units = o.units;
+    if (Array.isArray(o.garage)) S.garage = o.garage.filter(g => g && typeof g.id === 'string' && typeof g.name === 'string' && MAKES[g.make]);
     rebuildDefs(); save(); changeProfile(); renderCustom(); toast('Settings imported.');
   } catch (e) { toast('Import failed: ' + e.message, true); }
 }
 
 /* ───────────── wiring ───────────── */
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-act],[data-view],[data-pick],[data-remove],[data-preset],[data-define],[data-editc],[data-delc]'); if (!t) return;
+  const t = e.target.closest('[data-act],[data-view],[data-pick],[data-remove],[data-preset],[data-define],[data-editc],[data-delc],[data-usev],[data-delv]'); if (!t) return;
   const D = t.dataset;
   if (D.view && t.closest('#drawer, .toolbar')) return showView(D.view);
   if (D.pick) { S.slots.includes(D.pick) ? removeSlot(D.pick) : addSlot(D.pick); return; }
@@ -1163,9 +1242,14 @@ document.addEventListener('click', (e) => {
   if (D.define) { editingId = null; fillCustomForm({ name: D.define, short: D.define.split(' (')[0], tag: D.tag }); showView('custom'); $('cReq').focus(); return; }
   if (D.editc) { editingId = D.editc; fillCustomForm(S.custom.find(c => c.id === D.editc) || {}); window.scrollTo(0, 0); return; }
   if (D.delc) { S.custom = S.custom.filter(c => c.id !== D.delc); S.slots = S.slots.filter(k => k !== 'C:' + D.delc); rebuildDefs(); save(); renderCustom(); commitLayout(); return; }
+  if (D.usev) { const g = S.garage.find(x => x.id === D.usev); if (g && MAKES[g.make]) { changeProfile(g.make, g.engine, g.trans); renderGarage(); toast(`Profile set to “${g.name}”.`); } return; }
+  if (D.delv) { S.garage = S.garage.filter(x => x.id !== D.delv); save(); renderGarage(); return; }
   switch (D.act) {
     case 'menu': $('drawer').classList.toggle('open'); $('scrim').classList.toggle('open', $('drawer').classList.contains('open')); break;
-    case 'connect': S.mode === 'live' ? (log('Disconnected.'), teardown()) : connectLive(); break;
+    case 'connect': S.mode === 'live' ? (log('Disconnected.'), teardown()) : connectLive('ble'); break;
+    case 'connectSerial': connectLive('serial'); break;
+    case 'mark': markEvent(); break;
+    case 'saveVehicle': saveVehicle(); break;
     case 'sim': S.mode === 'sim' ? stopSim() : startSim(); break;
     case 'readSupported': readSupported().catch(err => toast('Read failed: ' + err.message, true)); break;
     case 'scan': D.mode === 'all' ? scanDtc(null, true) : scanDtc(D.mode); break;
@@ -1189,6 +1273,7 @@ document.addEventListener('change', (e) => {
   else if (t.id === 'selMake') changeProfile(t.value);
   else if (t.id === 'selEngine') changeProfile(undefined, t.value);
   else if (t.id === 'selTrans') changeProfile(undefined, undefined, t.value);
+  else if (t.id === 'setPurpose') { S.purpose = t.value; save(); renderSession(); renderCarInfo(); }
   else if (t.id === 'setUnits') { S.units = t.value; save(); updateCards(); buildChart(); renderGrid(); }
   else if (t.id === 'setPoll') { S.pollMs = Math.max(0, Math.min(5000, +t.value || 0)); save(); }
   else if (t.id === 'setShowAll') { S.showAll = t.checked; save(); renderVariables(); }
@@ -1196,13 +1281,15 @@ document.addEventListener('change', (e) => {
   else if (t.id === 'cfgFile' && t.files[0]) { t.files[0].text().then(importCfg); t.value = ''; }
 });
 $('varSearch').addEventListener('input', renderVariables);
+$('sessNotes').addEventListener('input', (e) => { S.notes = e.target.value; save(); });
+$('evtLabel').addEventListener('keydown', (e) => { if (e.key === 'Enter') markEvent(); });
 $('rawCmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') rawCommand(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('drawer').classList.remove('open'); $('scrim').classList.remove('open'); } });
 
 /* ───────────── start ───────────── */
 load(); rebuildDefs();
 $('varGroup').innerHTML = '<option value="">All groups</option>' + Object.values(G).map(g => `<option>${g}</option>`).join('');
-renderPresets(); renderCustom(); fillCustomForm({}); renderBadge(); renderVehicle(); renderCarInfo();
+renderPresets(); renderCustom(); fillCustomForm({}); renderBadge(); renderVehicle(); renderCarInfo(); renderGarage(); renderSession();
 { const saved = S.layouts[profKey()]; if (saved) S.slots = saved.filter(k => getDef(k)); else applyPreset('health', true); }
 if (!S.chartKeys.length) S.chartKeys = S.slots.filter(k => !getDef(k).derived).slice(0, 2);
 renderGrid(); buildChart(); setUI();
