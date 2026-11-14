@@ -1,410 +1,1068 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OBDLink MX+ | Toyota & Nissan Diagnostic Suite</title>
-    <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#0d1117">
-    <link rel="icon" href="icons/icon-192.png">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <style>
-        :root {
-            --bg-color: #0d1117;
-            --card-bg: #161b22;
-            --border-color: #30363d;
-            --text-main: #c9d1d9;
-            --text-muted: #8b949e;
-            --accent-green: #2ea043;
-            --accent-blue: #58a6ff;
-            --accent-red: #f85149;
-            --accent-warn: #d29922;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); padding: 1rem; max-width: 1400px; margin: 0 auto; }
-        
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px; }
-        h1 { font-size: 1.25rem; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px; }
-        h1 span { font-size: 0.75rem; background: #21262d; border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 4px; color: var(--accent-blue); }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BayScope | OBD-II Dashboard for Toyota & Nissan</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{--bg:#0d1117;--card:#161b22;--card2:#1c2230;--line:#30363d;--text:#c9d1d9;--muted:#8b949e;--green:#2ea043;--blue:#58a6ff;--red:#f85149;--warn:#d29922}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+body{background:var(--bg);color:var(--text);padding:1rem;max-width:1400px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:.75rem;margin-bottom:1rem;flex-wrap:wrap;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1{font-size:1.25rem;font-weight:700;color:#fff;letter-spacing:.3px}
+h2{font-size:1rem;color:#fff;margin-bottom:.6rem}
+h3{font-size:.85rem;color:#fff;margin:1rem 0 .4rem}
+.badge{font-size:.72rem;background:#21262d;border:1px solid var(--line);padding:2px 7px;border-radius:4px;color:var(--blue)}
+.muted{color:var(--muted);font-size:.8rem}
+.controls-bar,.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar{margin-bottom:1rem}
+select,button,input,textarea{background:#21262d;color:var(--text);border:1px solid var(--line);padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:500}
+button,select{cursor:pointer}
+input,textarea{font-weight:400;width:100%}
+input[type=checkbox]{width:auto}
+button:hover,select:hover{background:#30363d;border-color:var(--muted)}
+button.primary{background:var(--green);color:#fff;border-color:rgba(27,31,35,.15)}
+button.primary:hover{background:#2c974b}
+button.danger{background:#da3633;color:#fff}
+button.active{border-color:var(--blue);box-shadow:0 0 0 2px rgba(88,166,255,.3)}
+button:disabled{opacity:.45;cursor:not-allowed}
+#menuBtn{font-size:1.2rem;padding:2px 11px}
+.status-pill{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red)}
+.status-pill.sim{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.status-pill.live{background:var(--green);box-shadow:0 0 8px var(--green)}
 
-        .controls-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        select, button { background: #21262d; color: var(--text-main); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 500; }
-        select:hover, button:hover { background: #30363d; border-color: var(--text-muted); }
-        button.primary { background: var(--accent-green); color: #fff; border-color: rgba(27,31,35,.15); }
-        button.primary:hover { background: #2c974b; }
-        button.danger { background: #da3633; color: #fff; }
-        button.danger:hover { background: #b62324; }
-        button.active { border-color: var(--accent-blue); box-shadow: 0 0 0 2px rgba(88,166,255,0.3); }
+/* drawer */
+#drawer{position:fixed;top:0;left:0;bottom:0;width:260px;max-width:82vw;background:var(--card);border-right:1px solid var(--line);transform:translateX(-102%);transition:transform .18s;z-index:30;padding:1rem .6rem;overflow-y:auto}
+#drawer.open{transform:none}
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:none}
+#scrim.open{display:block}
+#drawer .dh{padding:.2rem .6rem 1rem;font-weight:700;color:#fff;font-size:1.05rem}
+#drawer button{display:block;width:100%;text-align:left;background:none;border:none;border-radius:6px;padding:9px 12px;font-size:.92rem;color:var(--text)}
+#drawer button:hover{background:#21262d}
+#drawer button.cur{background:#21262d;color:#fff;box-shadow:inset 3px 0 var(--blue)}
+#drawer hr{border:none;border-top:1px solid var(--line);margin:.5rem 0}
 
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between; }
-        .card-title { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
-        .metric-value { font-size: 2.2rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
-        .metric-unit { font-size: 0.9rem; color: var(--text-muted); font-weight: normal; margin-left: 4px; }
-        .metric-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+.view{display:none}.view.active{display:block}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.8rem;margin-bottom:1rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.8rem .9rem;display:flex;flex-direction:column;gap:2px;min-height:122px}
+.card-title{font-size:.74rem;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.card-tools{display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0}
+.card-tools label{display:flex;align-items:center;gap:3px;cursor:pointer;font-size:.72rem}
+.x{background:none;border:none;color:var(--muted);font-size:1.2rem;line-height:1;padding:0 4px}
+.x:hover{color:var(--red);background:none}
+.metric-value{font-size:2rem;font-weight:700;color:#fff;font-variant-numeric:tabular-nums}
+.metric-unit{font-size:.85rem;color:var(--muted);margin-left:4px}
+.metric-sub{font-size:.72rem;color:var(--muted)}
+.bar{height:5px;background:#21262d;border-radius:3px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .25s}
+.card.na .metric-value{color:var(--muted)}
+.empty{border:1px dashed var(--line);border-radius:8px;padding:1.4rem;text-align:center;color:var(--muted);grid-column:1/-1}
+@media(max-width:600px){.dashboard-grid{grid-template-columns:repeat(2,1fr);gap:.55rem}.metric-value{font-size:1.6rem}.card{padding:.65rem;min-height:104px}.card-tools label{display:none}.card-tools label:has(input:checked){display:flex}}
+.chart-box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:1rem;height:280px;display:flex;flex-direction:column}
+.chart-box canvas{flex:1;min-height:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:1rem;margin-bottom:1rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.log-terminal{background:#010409;border:1px solid var(--line);border-radius:6px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.75rem;height:300px;overflow-y:auto;color:var(--muted);white-space:pre-wrap}
+.log-terminal *{font-family:inherit}
 
-        .charts-container { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-        @media(max-width: 900px) { .charts-container { grid-template-columns: 1fr; } }
-        
-        .chart-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; height: 240px; display: flex; flex-direction: column; }
-        canvas { width: 100% !important; height: 170px !important; flex-grow: 1; }
-
-        .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        @media(max-width: 900px) { .bottom-grid { grid-template-columns: 1fr; } }
-
-        .panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; max-height: 250px; overflow-y: auto; }
-        .panel h2 { font-size: 0.9rem; margin-bottom: 0.75rem; color: #fff; display: flex; justify-content: space-between; align-items: center; }
-        
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-color); }
-        th { color: var(--text-muted); font-weight: 600; }
-        
-        .status-pill { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red); margin-right: 6px; }
-        .status-pill.connected { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-        
-        .log-terminal { background: #010409; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; height: 120px; overflow-y: auto; color: var(--text-muted); }
-    </style>
-    <!-- Lightweight Charting Lib -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+/* picker */
+.picker-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line)}
+.picker-row .nm{color:#fff;font-size:.9rem}
+.tag{display:inline-block;font-size:.66rem;border:1px solid var(--line);border-radius:10px;padding:0 6px;margin-left:5px;color:var(--muted);vertical-align:middle}
+.tag.ok{color:var(--green);border-color:var(--green)}.tag.warn{color:var(--warn);border-color:var(--warn)}.tag.no{color:var(--red);border-color:var(--red)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:.8rem}
+.filters input[type=search]{flex:1;min-width:180px}
+.filters label{font-size:.82rem;display:flex;gap:5px;align-items:center}
+.preset{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.preset b{color:#fff}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:.8rem}
+.form-grid label{display:flex;flex-direction:column;gap:3px;font-size:.78rem;color:var(--muted)}
+.note{border-left:3px solid var(--warn);background:#1c1a12;padding:.6rem .8rem;border-radius:4px;font-size:.82rem;margin:.6rem 0;line-height:1.45}
+.note.info{border-color:var(--blue);background:#101a28}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#21262d;border:1px solid var(--line);padding:9px 16px;border-radius:8px;font-size:.88rem;z-index:50;display:none;max-width:90vw}
+#toast.err{border-color:var(--red)}
+p{line-height:1.5;font-size:.9rem;margin-bottom:.6rem}
+li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-    <header>
-        <h1>
-            <span class="status-pill" id="connectionStatus"></span> 
-            OBDLink MX+ <span>Toyota / Nissan Suite</span>
-        </h1>
-        <div class="controls-bar">
-            <select id="vehicleMake" onchange="switchProfile()">
-                <option value="TOYOTA">Toyota Enhanced Profile</option>
-                <option value="NISSAN">Nissan Enhanced Profile</option>
-                <option value="GENERIC">Standard OBD-II / Generic</option>
-            </select>
-            <button id="btConnectBtn" class="primary" onclick="toggleBluetooth()">Connect MX+</button>
-            <button id="simBtn" onclick="toggleSimulation()">Start Sim</button>
-            <button onclick="exportCSV()">Export CSV</button>
-            <button onclick="copyAISummary()">Copy AI Prompt</button>
-        </div>
-    </header>
+<header>
+  <div class="brand">
+    <button id="menuBtn" data-act="menu" aria-label="Open menu">☰</button>
+    <span class="status-pill" id="connectionStatus" title="Not connected"></span>
+    <h1>BayScope</h1>
+    <span class="badge" id="profileBadge"></span>
+  </div>
+  <div class="controls-bar">
+    <button class="primary" id="btConnectBtn" data-act="connect">Connect adapter</button>
+    <button id="simBtn" data-act="sim">Start Sim</button>
+  </div>
+</header>
 
-    <!-- Real-Time Telemetry Cards -->
-    <div class="dashboard-grid">
-        <div class="card">
-            <div class="card-title">Engine RPM <span id="makeEngineLbl">Toyota 2ZR/2GR</span></div>
-            <div><span class="metric-value" id="valRpm">0</span><span class="metric-unit">RPM</span></div>
-            <div class="metric-sub" id="subRpm">Idle target: 650 RPM</div>
-        </div>
-        <div class="card">
-            <div class="card-title">Engine Load</div>
-            <div><span class="metric-value" id="valLoad">0.0</span><span class="metric-unit">%</span></div>
-            <div class="metric-sub">Calculated Absolute Load</div>
-        </div>
-        <div class="card">
-            <div class="card-title" id="transTitle">Transmission / CVT Temp</div>
-            <div><span class="metric-value" id="valTransTemp">--</span><span class="metric-unit">°F</span></div>
-            <div class="metric-sub" id="subGear">Gear: Park (P)</div>
-        </div>
-        <div class="card">
-            <div class="card-title" id="secondaryTitle">VVT / Line Pressure</div>
-            <div><span class="metric-value" id="valSecondary">0.0</span><span class="metric-unit" id="secUnit">psi</span></div>
-            <div class="metric-sub" id="subSecondary">Target Advance: 0°</div>
-        </div>
-    </div>
+<div id="scrim" data-act="menu"></div>
+<nav id="drawer" aria-label="Main menu">
+  <div class="dh">BayScope</div>
+  <button data-view="dashboard">Dashboard</button>
+  <button data-view="variables">Variables</button>
+  <button data-view="targets">Scan targets</button>
+  <button data-view="vehicle">Vehicle profile</button>
+  <button data-view="codes">Trouble codes</button>
+  <hr>
+  <button data-view="custom">Custom PIDs</button>
+  <button data-view="terminal">Terminal log</button>
+  <button data-view="data">Data &amp; export</button>
+  <button data-view="settings">Settings</button>
+  <button data-view="about">About</button>
+</nav>
 
-    <!-- Live Charts -->
-    <div class="charts-container">
-        <div class="chart-box">
-            <div class="card-title">Live Engine Telemetry (RPM & Load)</div>
-            <canvas id="engineChart"></canvas>
-        </div>
-        <div class="chart-box">
-            <div class="card-title" id="transChartTitle">Transmission / CVT Slip & Temp</div>
-            <canvas id="transChart"></canvas>
-        </div>
-    </div>
+<main>
+<!-- DASHBOARD -->
+<section class="view" id="view-dashboard">
+  <div class="toolbar">
+    <button class="primary" data-view="variables">+ Add variable</button>
+    <select id="quickPreset" title="Load a scan target"></select>
+    <span class="muted" id="slotCount"></span>
+    <span class="muted" id="rateInfo"></span>
+  </div>
+  <div class="dashboard-grid" id="grid"></div>
+  <div class="chart-box">
+    <div class="card-title"><span>Live chart</span><span class="muted" style="text-transform:none">tick “chart” on up to 4 gauges · each line is scaled to its own range</span></div>
+    <canvas id="liveChart"></canvas>
+  </div>
+</section>
 
-    <!-- Diagnostics & Logs -->
-    <div class="bottom-grid">
-        <div class="panel">
-            <h2>
-                Active Diagnostic Trouble Codes (DTCs)
-                <button onclick="scanDTCs()" style="padding: 2px 8px; font-size: 0.75rem;">Scan Codes</button>
-            </h2>
-            <table>
-                <thead>
-                    <tr><th>Code</th><th>Module</th><th>Description</th></tr>
-                </thead>
-                <tbody id="dtcTableBody">
-                    <tr><td colspan="3" style="text-align:center; color: var(--text-muted);">No codes loaded. Click Scan or Connect.</td></tr>
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="panel">
-            <h2>ELM327 / MX+ Terminal Log</h2>
-            <div class="log-terminal" id="terminalLog">
-                [System] Ready. Select Toyota or Nissan profile, then click Connect MX+ or Start Sim.<br>
-            </div>
-        </div>
+<!-- VARIABLES -->
+<section class="view" id="view-variables">
+  <h2>Variables</h2>
+  <p class="muted" id="varIntro"></p>
+  <div class="filters">
+    <input type="search" id="varSearch" placeholder="Search variables…">
+    <select id="varGroup"></select>
+    <label><input type="checkbox" id="varSupOnly"> Only ones my car reports</label>
+    <button data-act="readSupported" id="readSupBtn">Read supported list from car</button>
+  </div>
+  <div id="varList"></div>
+</section>
+
+<!-- SCAN TARGETS -->
+<section class="view" id="view-targets">
+  <h2>Scan targets</h2>
+  <p class="muted">Pick what you're hunting and BayScope fills the dashboard with the variables that matter for it (up to 10). It adapts to your engine, transmission, and—once connected—to what your car actually reports. Fewer variables also means a faster refresh rate.</p>
+  <div id="presetList" class="panel"></div>
+</section>
+
+<!-- VEHICLE -->
+<section class="view" id="view-vehicle">
+  <h2>Vehicle profile</h2>
+  <div class="form-grid">
+    <label>Manufacturer<select id="selMake"></select></label>
+    <label>Engine<select id="selEngine"></select></label>
+    <label>Transmission<select id="selTrans"></select></label>
+  </div>
+  <div class="panel" id="profileSummary"></div>
+  <div class="note info">Your dashboard layout is remembered separately for each manufacturer / engine / transmission combination.</div>
+</section>
+
+<!-- CODES -->
+<section class="view" id="view-codes">
+  <h2>Trouble codes</h2>
+  <div class="toolbar">
+    <button class="primary" data-act="scan" data-mode="03">Stored (Mode 03)</button>
+    <button data-act="scan" data-mode="07">Pending (Mode 07)</button>
+    <button data-act="scan" data-mode="0A">Permanent (Mode 0A)</button>
+    <span class="muted" id="dtcSource"></span>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Code</th><th>Kind</th><th>Description</th></tr></thead>
+    <tbody id="dtcBody"><tr><td colspan="3" class="muted" style="text-align:center">Nothing scanned yet. Connect an adapter, then scan.</td></tr></tbody></table>
+  </div>
+  <div class="note info">This reads generic (SAE) powertrain codes only. Manufacturer-specific codes and body/ABS/airbag modules need a different request and are not read here. Reading codes does not clear them.</div>
+</section>
+
+<!-- CUSTOM -->
+<section class="view" id="view-custom">
+  <h2>Custom PIDs</h2>
+  <p class="muted">This is how you add manufacturer-specific (enhanced) variables — transmission fluid temp, CVT pulley pressures, VVT angle, and so on. You supply the request and a formula; the variable then shows up in the picker like any other.</p>
+  <div class="panel">
+    <h3 id="customFormTitle">New custom variable</h3>
+    <div class="form-grid">
+      <label>Name<input id="cName" placeholder="CVT fluid temperature"></label>
+      <label>Short name<input id="cShort" placeholder="CVT temp"></label>
+      <label>Unit<input id="cUnit" placeholder="°C"></label>
+      <label>Belongs to<select id="cTag"><option value="engine">Engine</option><option value="trans">Transmission</option><option value="other">Other</option></select></label>
+      <label>Module header (CAN 11-bit)<input id="cHdr" placeholder="7E1"></label>
+      <label>Request (hex)<input id="cReq" placeholder="2101"></label>
+      <label>Formula (A = first data byte, B = second…)<input id="cFormula" placeholder="A-40"></label>
+      <label>Gauge min<input id="cMin" type="number" value="0"></label>
+      <label>Gauge max<input id="cMax" type="number" value="100"></label>
+      <label>Decimals<input id="cDec" type="number" value="0" min="0" max="4"></label>
     </div>
+    <p class="muted">Formulas accept numbers, A–H, + − × ÷, parentheses, and s8(), s16(), min(), max(), abs(). Values should be in the unit you typed above. Example: <code>(A*256+B)/10-40</code>. For requests like <code>2101</code> the module's echo bytes are stripped for you, so A is the first real data byte.</p>
+    <div class="toolbar">
+      <button class="primary" data-act="saveCustom">Save</button>
+      <button data-act="clearCustomForm">Clear form</button>
+    </div>
+  </div>
+  <div class="panel"><h3>Your custom variables</h3><div id="customList"></div></div>
+  <div class="note">BayScope does not ship verified Toyota or Nissan enhanced PID definitions — those differ by model, year, and module, and a wrong byte offset would show you plausible-looking wrong numbers. Use the Terminal log's raw command box to try a request on your car, then record what works here.</div>
+</section>
+
+<!-- TERMINAL -->
+<section class="view" id="view-terminal">
+  <h2>Terminal log</h2>
+  <div class="log-terminal" id="terminalLog"></div>
+  <div class="toolbar" style="margin-top:.6rem">
+    <input id="rawCmd" placeholder="Raw adapter command, e.g. ATRV or 0105" style="flex:1;min-width:200px" autocomplete="off" autocapitalize="characters">
+    <button data-act="rawSend">Send</button>
+    <button data-act="clearLog">Clear log</button>
+  </div>
+</section>
+
+<!-- DATA -->
+<section class="view" id="view-data">
+  <h2>Data &amp; export</h2>
+  <div class="panel">
+    <h3>Recorded session</h3>
+    <p class="muted" id="histInfo"></p>
+    <div class="toolbar">
+      <button class="primary" data-act="csv">Download CSV</button>
+      <button data-act="ai">Copy AI prompt</button>
+      <button data-act="clearSession">Clear session data</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Backup settings</h3>
+    <p class="muted">Custom variables and your per-vehicle dashboard layouts.</p>
+    <div class="toolbar">
+      <button data-act="exportCfg">Export JSON</button>
+      <button data-act="importCfg">Import JSON</button>
+      <input type="file" id="cfgFile" accept="application/json" style="display:none">
+    </div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section class="view" id="view-settings">
+  <h2>Settings</h2>
+  <div class="panel">
+    <div class="form-grid">
+      <label>Units<select id="setUnits"><option value="imperial">Imperial (°F, mph, psi)</option><option value="metric">Metric (°C, km/h, kPa)</option></select></label>
+      <label>Pause between read cycles (ms)<input id="setPoll" type="number" min="0" max="5000" step="50"></label>
+    </div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:.88rem;margin-bottom:.8rem"><input type="checkbox" id="setShowAll"> Show every variable, even ones that don't suit the selected engine (e.g. bank 2 on a 4-cylinder)</label>
+    <div class="toolbar">
+      <button data-act="resetLayout">Reset this vehicle's dashboard</button>
+      <button class="danger" data-act="wipe">Erase all saved BayScope data</button>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="view" id="view-about">
+  <h2>About BayScope</h2>
+  <p>A single-page OBD-II dashboard for Toyota, Nissan, and generic vehicles. It talks to a Bluetooth LE ELM327-compatible adapter through Web Bluetooth, so it needs Chrome or Edge (desktop) or Chrome on Android, over HTTPS.</p>
+  <div class="note"><b>Read this before trusting it in a car.</b> The standard-PID read path, the supported-PID scan, and the code reader are implemented but were written without access to a physical adapter. Try it on a parked car first and compare against a known-good tool. Anything marked <i>est.</i> or <i>unverified</i> is an estimate or unconfirmed on real vehicles.</div>
+  <p class="muted">Simulation mode generates plausible data with no car attached — everything it shows is fake, and exports from it are labelled as such.</p>
+</section>
+</main>
+
+<div id="toast"></div>
 
 <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+(() => {
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const sid = (k) => 'v_' + k.replace(/[^A-Za-z0-9]/g, '_');
+const MAX_SLOTS = 10, MAX_CHART = 4;
+
+/* ───────────── toast / log ───────────── */
+let toastTimer;
+function toast(msg, isErr) {
+  const t = $('toast'); t.textContent = msg; t.className = isErr ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', isErr ? 6000 : 2800);
+}
+function log(msg, cls) {
+  const el = $('terminalLog');
+  const line = document.createElement('div');
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  if (cls === 'tx') line.style.color = '#58a6ff';
+  if (cls === 'err') line.style.color = '#f85149';
+  el.appendChild(line);
+  while (el.childNodes.length > 600) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ───────────── units ───────────── */
+const CONV = {
+  temp:  { metric: { f: v => v, u: '°C', d: 0 }, imperial: { f: v => v * 9 / 5 + 32, u: '°F', d: 0 } },
+  speed: { metric: { f: v => v, u: 'km/h', d: 0 }, imperial: { f: v => v * 0.621371, u: 'mph', d: 0 } },
+  press: { metric: { f: v => v, u: 'kPa', d: 0 }, imperial: { f: v => v * 0.145038, u: 'psi', d: 1 } },
+  dist:  { metric: { f: v => v, u: 'km', d: 0 }, imperial: { f: v => v * 0.621371, u: 'mi', d: 0 } },
+  fuel:  { metric: { f: v => v, u: 'L/h', d: 0 }, imperial: { f: v => v * 0.264172, u: 'gal/h', d: 1 } },
+  mpg:   { metric: { f: v => 235.215 / Math.max(v, 0.1), u: 'L/100km', d: 0 }, imperial: { f: v => v, u: 'mpg', d: 0 } },
+  rpmper:{ metric: { f: v => v, u: 'rpm per km/h', d: 1 }, imperial: { f: v => v * 1.609344, u: 'rpm per mph', d: 0 } },
+};
+function disp(def, v) {            // metric value -> {n, unit, dec}
+  if (def.qty && CONV[def.qty]) { const c = CONV[def.qty][S.units]; return { n: c.f(v), unit: c.u, dec: def.dec + c.d }; }
+  return { n: v, unit: def.unit, dec: def.dec };
+}
+function dispRange(def) {
+  const a = disp(def, def.min).n, b = disp(def, def.max).n;
+  return [Math.min(a, b), Math.max(a, b)];
+}
+function fmt(def, v) { const d = disp(def, v); return { text: Number(d.n).toFixed(Math.max(0, d.dec)), unit: d.unit, n: d.n }; }
+
+/* ───────────── catalog of standard (SAE J1979 Mode 01) variables ───────────── */
+const G = { ENG: 'Engine', AIR: 'Fuel & air', IGN: 'Ignition', EMI: 'Emissions & O2', TMP: 'Temperatures', DRV: 'Transmission & drivetrain', ELE: 'Electrical', HYB: 'Hybrid', ECO: 'Economy', CUS: 'Custom' };
+const STD = [];
+function def(pid, name, short, unit, qty, n, fn, o = {}) {
+  STD.push({ key: '01' + pid, pid, name, short, unit, qty, n, fn, group: o.g || G.ENG, min: o.min ?? 0, max: o.max ?? 100, dec: o.dec ?? 0, banks2: !!o.b2, hybrid: !!o.hy, note: o.note || '', unv: !!o.unv });
+}
+const pct = (a) => a * 100 / 255;
+const trim = (a) => (a - 128) * 100 / 128;
+def('0C', 'Engine speed', 'RPM', 'rpm', null, 2, (a, b) => (a * 256 + b) / 4, { min: 0, max: 7000 });
+def('04', 'Calculated engine load', 'Engine load', '%', null, 1, a => pct(a), { dec: 1 });
+def('43', 'Absolute load value', 'Abs. load', '%', null, 2, (a, b) => (a * 256 + b) * 100 / 255, { dec: 1, max: 100 });
+def('11', 'Throttle position', 'Throttle', '%', null, 1, a => pct(a), { g: G.AIR, dec: 1 });
+def('45', 'Relative throttle position', 'Rel. throttle', '%', null, 1, a => pct(a), { g: G.AIR, dec: 1 });
+def('4C', 'Commanded throttle actuator', 'Cmd. throttle', '%', null, 1, a => pct(a), { g: G.AIR, dec: 1 });
+def('49', 'Accelerator pedal position D', 'Pedal D', '%', null, 1, a => pct(a), { g: G.AIR, dec: 1 });
+def('4A', 'Accelerator pedal position E', 'Pedal E', '%', null, 1, a => pct(a), { g: G.AIR, dec: 1 });
+def('62', 'Actual engine torque (% of reference)', 'Torque %', '%', null, 1, a => a - 125, { min: -50, max: 125, unv: true, note: 'Not reported by many Toyota/Nissan ECUs.' });
+def('10', 'Mass air flow', 'MAF', 'g/s', null, 2, (a, b) => (a * 256 + b) / 100, { g: G.AIR, dec: 1, max: 250 });
+def('0B', 'Intake manifold pressure (MAP)', 'MAP', 'kPa', 'press', 1, a => a, { g: G.AIR, max: 255 });
+def('33', 'Barometric pressure', 'Baro', 'kPa', 'press', 1, a => a, { g: G.AIR, min: 60, max: 110 });
+def('0A', 'Fuel pressure (gauge)', 'Fuel press.', 'kPa', 'press', 1, a => a * 3, { g: G.AIR, max: 765 });
+def('22', 'Fuel rail pressure (relative to manifold)', 'Rail press.', 'kPa', 'press', 2, (a, b) => 0.079 * (a * 256 + b), { g: G.AIR, max: 5200 });
+def('23', 'Fuel rail pressure (direct injection)', 'GDI rail press.', 'kPa', 'press', 2, (a, b) => 10 * (a * 256 + b), { g: G.AIR, max: 25000, note: 'Direct-injection engines (e.g. D-4S).' });
+def('06', 'Short-term fuel trim — bank 1', 'STFT B1', '%', null, 1, a => trim(a), { g: G.AIR, dec: 1, min: -25, max: 25 });
+def('07', 'Long-term fuel trim — bank 1', 'LTFT B1', '%', null, 1, a => trim(a), { g: G.AIR, dec: 1, min: -25, max: 25 });
+def('08', 'Short-term fuel trim — bank 2', 'STFT B2', '%', null, 1, a => trim(a), { g: G.AIR, dec: 1, min: -25, max: 25, b2: true });
+def('09', 'Long-term fuel trim — bank 2', 'LTFT B2', '%', null, 1, a => trim(a), { g: G.AIR, dec: 1, min: -25, max: 25, b2: true });
+def('44', 'Commanded fuel/air equivalence ratio', 'Cmd. equiv.', 'φ', null, 2, (a, b) => (a * 256 + b) / 32768, { g: G.AIR, dec: 3, min: 0.5, max: 1.5 });
+def('0E', 'Ignition timing advance (cyl. 1)', 'Timing', '°', null, 1, a => a / 2 - 64, { g: G.IGN, dec: 1, min: -10, max: 60 });
+def('05', 'Engine coolant temperature', 'Coolant', '°C', 'temp', 1, a => a - 40, { g: G.TMP, min: -20, max: 130 });
+def('0F', 'Intake air temperature', 'Intake air', '°C', 'temp', 1, a => a - 40, { g: G.TMP, min: -20, max: 100 });
+def('46', 'Ambient air temperature', 'Ambient', '°C', 'temp', 1, a => a - 40, { g: G.TMP, min: -30, max: 50 });
+def('5C', 'Engine oil temperature', 'Oil temp', '°C', 'temp', 1, a => a - 40, { g: G.TMP, min: -20, max: 150, note: 'Often not reported on Toyota/Nissan.' });
+def('3C', 'Catalyst temperature — bank 1, sensor 1', 'Cat B1S1', '°C', 'temp', 2, (a, b) => (a * 256 + b) / 10 - 40, { g: G.EMI, max: 900 });
+def('3E', 'Catalyst temperature — bank 1, sensor 2', 'Cat B1S2', '°C', 'temp', 2, (a, b) => (a * 256 + b) / 10 - 40, { g: G.EMI, max: 900 });
+def('3D', 'Catalyst temperature — bank 2, sensor 1', 'Cat B2S1', '°C', 'temp', 2, (a, b) => (a * 256 + b) / 10 - 40, { g: G.EMI, max: 900, b2: true });
+def('3F', 'Catalyst temperature — bank 2, sensor 2', 'Cat B2S2', '°C', 'temp', 2, (a, b) => (a * 256 + b) / 10 - 40, { g: G.EMI, max: 900, b2: true });
+def('14', 'O2 sensor voltage — bank 1, sensor 1 (narrow-band)', 'O2 B1S1', 'V', null, 2, a => a / 200, { g: G.EMI, dec: 2, max: 1.1, note: 'Newer Toyota/Nissan use wide-band A/F sensors instead (see λ entries).' });
+def('15', 'O2 sensor voltage — bank 1, sensor 2', 'O2 B1S2', 'V', null, 2, a => a / 200, { g: G.EMI, dec: 2, max: 1.1 });
+def('18', 'O2 sensor voltage — bank 2, sensor 1 (narrow-band)', 'O2 B2S1', 'V', null, 2, a => a / 200, { g: G.EMI, dec: 2, max: 1.1, b2: true });
+def('19', 'O2 sensor voltage — bank 2, sensor 2', 'O2 B2S2', 'V', null, 2, a => a / 200, { g: G.EMI, dec: 2, max: 1.1, b2: true });
+def('24', 'Wide-band A/F sensor λ — bank 1, sensor 1', 'λ B1S1', 'λ', null, 4, (a, b) => (a * 256 + b) * 2 / 65536, { g: G.EMI, dec: 3, min: 0.7, max: 1.3, note: '1.000 = stoichiometric. Under 1 rich, over 1 lean.' });
+def('25', 'Wide-band A/F sensor λ — bank 1, sensor 2', 'λ B1S2', 'λ', null, 4, (a, b) => (a * 256 + b) * 2 / 65536, { g: G.EMI, dec: 3, min: 0.7, max: 1.3 });
+def('28', 'Wide-band A/F sensor λ — bank 2, sensor 1', 'λ B2S1', 'λ', null, 4, (a, b) => (a * 256 + b) * 2 / 65536, { g: G.EMI, dec: 3, min: 0.7, max: 1.3, b2: true });
+def('29', 'Wide-band A/F sensor λ — bank 2, sensor 2', 'λ B2S2', 'λ', null, 4, (a, b) => (a * 256 + b) * 2 / 65536, { g: G.EMI, dec: 3, min: 0.7, max: 1.3, b2: true });
+def('2C', 'Commanded EGR', 'Cmd. EGR', '%', null, 1, a => pct(a), { g: G.EMI, dec: 1 });
+def('2D', 'EGR error', 'EGR error', '%', null, 1, a => trim(a), { g: G.EMI, dec: 1, min: -25, max: 25 });
+def('2E', 'Commanded evaporative purge', 'EVAP purge', '%', null, 1, a => pct(a), { g: G.EMI, dec: 1 });
+def('2F', 'Fuel tank level', 'Fuel level', '%', null, 1, a => pct(a), { g: G.AIR, dec: 1 });
+def('5E', 'Engine fuel rate', 'Fuel rate', 'L/h', 'fuel', 2, (a, b) => (a * 256 + b) / 20, { g: G.AIR, dec: 1, max: 40, note: 'Rarely reported on gasoline Toyota/Nissan.' });
+def('0D', 'Vehicle speed', 'Speed', 'km/h', 'speed', 1, a => a, { g: G.DRV, max: 200 });
+def('A4', 'Transmission actual gear (ratio)', 'Trans gear', 'ratio', null, 4, (a, b, c, d) => (c * 256 + d) / 1000, { g: G.DRV, dec: 2, max: 8, unv: true, note: 'Only on newer vehicles that implement it; most Toyota/Nissan will not answer.' });
+def('42', 'Control module voltage', 'Battery V', 'V', null, 2, (a, b) => (a * 256 + b) / 1000, { g: G.ELE, dec: 2, min: 9, max: 16 });
+def('1F', 'Run time since engine start', 'Run time', 's', null, 2, (a, b) => a * 256 + b, { max: 3600 });
+def('21', 'Distance driven with MIL on', 'Dist. MIL on', 'km', 'dist', 2, (a, b) => a * 256 + b, { max: 1000 });
+def('31', 'Distance since codes cleared', 'Dist. since clr', 'km', 'dist', 2, (a, b) => a * 256 + b, { max: 10000 });
+def('30', 'Warm-ups since codes cleared', 'Warm-ups', '', null, 1, a => a, { max: 255 });
+def('5B', 'Hybrid battery pack remaining life', 'HV battery', '%', null, 1, a => pct(a), { g: G.HYB, dec: 1, hy: true, note: 'Reported by some hybrids only.' });
+
+/* Derived variables — computed from standard ones, no extra requests needed */
+const DERIVED = [
+  { key: 'D:RATIO', derived: true, deps: ['010C', '010D'], name: 'Drivetrain ratio index (RPM ÷ speed)', short: 'RPM / speed', unit: 'rpm per km/h', qty: 'rpmper', group: G.DRV, min: 0, max: 100, dec: 1, est: true,
+    note: 'Steady in each gear. A sweep on a CVT, or a jump on an automatic with no gear change, points to slip. Only meaningful above ~10 km/h.',
+    fn: (v) => (v['010D'] > 8 && v['010C'] > 0) ? v['010C'] / v['010D'] : null },
+  { key: 'D:MPG', derived: true, deps: ['0110', '010D'], name: 'Instant fuel economy (estimated)', short: 'Econ. (est.)', unit: 'mpg', qty: 'mpg', group: G.ECO, min: 0, max: 60, dec: 0, est: true,
+    note: 'From MAF and speed, assuming gasoline at 14.7:1. Rough guide only.',
+    fn: (v) => (v['010D'] > 3 && v['0110'] > 0.3) ? Math.min(99, (v['010D'] * 0.621371) * 11.437 / v['0110']) : null },
+];
+
+/* Manufacturer-specific variables that exist on these platforms but whose definitions are NOT bundled */
+const ENH = {
+  TOYOTA: {
+    engine: ['VVT intake advance angle (bank 1)', 'VVT exhaust advance angle', 'Knock correction learn value', 'Injector pulse width', 'A/F sensor heater duty'],
+    AT: ['ATF temperature (TCM)', 'Turbine / input shaft speed', 'Torque converter lock-up status', 'Commanded gear / shift solenoids', 'Line pressure duty'],
+    CVT: ['CVT fluid temperature', 'Primary pulley speed', 'Secondary pulley speed', 'Target vs. actual ratio', 'Line pressure duty'],
+    ECVT: ['MG1 speed', 'MG2 speed', 'Inverter temperature', 'HV battery state of charge'],
+  },
+  NISSAN: {
+    engine: ['Intake valve timing (CVTC) angle', 'Injector pulse width', 'Ignition / knock correction', 'A/F sensor heater duty'],
+    AT: ['ATF temperature', 'Turbine revolution speed', 'Current gear position', 'Lock-up solenoid duty'],
+    CVT: ['CVT fluid temperature', 'Primary pulley speed', 'Secondary pulley speed', 'Secondary pressure (target / actual)', 'Torque converter slip speed', 'Actual belt ratio'],
+  },
+};
+
+/* ───────────── vehicle profiles ───────────── */
+const MAKES = {
+  TOYOTA: { name: 'Toyota',
+    engines: {
+      '2ZR-FE':   { name: '2ZR-FE — 1.8L I4', banks: 1 },
+      '2AR-FE':   { name: '2AR-FE — 2.5L I4', banks: 1 },
+      'A25A-FKS': { name: 'A25A-FKS — 2.5L I4 Dynamic Force (D-4S)', banks: 1 },
+      'A25A-FXS': { name: 'A25A-FXS — 2.5L I4 hybrid', banks: 1, hybrid: true },
+      '2GR-FE':   { name: '2GR-FE — 3.5L V6', banks: 2 },
+      '2GR-FKS':  { name: '2GR-FKS — 3.5L V6 (D-4S)', banks: 2 },
+    },
+    trans: { AT: 'Automatic (A-/U-series)', CVT: 'CVT (K-series / Direct Shift)', ECVT: 'Hybrid eCVT', MT: 'Manual' } },
+  NISSAN: { name: 'Nissan',
+    engines: {
+      'HR16DE':  { name: 'HR16DE — 1.6L I4', banks: 1 },
+      'MR20DE':  { name: 'MR20DE — 2.0L I4', banks: 1 },
+      'QR25DE':  { name: 'QR25DE — 2.5L I4', banks: 1 },
+      'VQ35DE':  { name: 'VQ35DE — 3.5L V6', banks: 2 },
+      'VQ37VHR': { name: 'VQ37VHR — 3.7L V6', banks: 2 },
+    },
+    trans: { CVT: 'CVT (Jatco)', AT: 'Automatic (RE-series)', MT: 'Manual' } },
+  GENERIC: { name: 'Generic OBD-II',
+    engines: {
+      'I4':  { name: 'Gasoline — 4-cylinder / single bank', banks: 1 },
+      'V6V8':{ name: 'Gasoline — V6 / V8 (two banks)', banks: 2 },
+      'HEV': { name: 'Hybrid', banks: 1, hybrid: true },
+    },
+    trans: { AT: 'Automatic', CVT: 'CVT', MT: 'Manual' } },
+};
+
+/* ───────────── scan-target presets ───────────── */
+const PRESETS = [
+  { id: 'health', name: 'General health check', why: 'A broad first look: speed, load, temps, voltage, and both fuel trims.',
+    keys: ['010C', '0104', '0105', '010D', '0142', '010F', '0111', '0106', '0107', '010B'] },
+  { id: 'fuel', name: 'Lean / rich — fuel trim hunt', why: 'Trims, airflow, and the O2/λ readings. Large positive trims = lean (vacuum leak, weak fuel); negative = rich.',
+    keys: ['0106', '0107', '0108', '0109', '0124', '0128', '0114', '0110', '010B', '010C', '0104', '0105'] },
+  { id: 'misfire', name: 'Rough idle / misfire', why: 'Idle stability, load, timing, trims, and airflow while the engine runs rough.',
+    keys: ['010C', '0104', '010E', '0106', '0107', '010B', '0110', '0111', '0105', '0142'] },
+  { id: 'warm', name: 'Warm-up & thermostat', why: 'Coolant, oil, intake temps against run time. Coolant should settle and hold; a slow climb or never reaching temp points to the thermostat.',
+    keys: ['0105', '010F', '015C', '011F', '010C', '0104', '010D', '0146', '0142'] },
+  { id: 'trans', name: 'Transmission & drivetrain', why: 'RPM, speed, and the RPM÷speed ratio show gear and slip behaviour on any car. Add your custom ATF/CVT variables and they join automatically.',
+    keys: ['010C', '010D', 'D:RATIO', '0104', '0111', '0105', '01A4'], custom: 'trans' },
+  { id: 'cat', name: 'Catalyst & emissions', why: 'Cat temps, upstream/downstream O2 or λ, trims, and purge/EGR.',
+    keys: ['013C', '013E', '013D', '013F', '0124', '0125', '0114', '0115', '0106', '0107', '012E', '012C'] },
+  { id: 'econ', name: 'Fuel economy', why: 'Estimated MPG alongside the things that drive it.',
+    keys: ['D:MPG', '0110', '010D', '010C', '0104', '0111', '015E', '012F'] },
+  { id: 'hybrid', name: 'Hybrid system', why: 'Pack life with engine and vehicle state.',
+    keys: ['015B', '010C', '010D', '0104', '0105', '0142'] },
+];
+
+/* ───────────── common generic DTC descriptions ───────────── */
+const DTC = {
+  P0011:'Intake camshaft timing over-advanced (bank 1)', P0012:'Intake camshaft timing over-retarded (bank 1)', P0016:'Crankshaft / camshaft position correlation (bank 1 sensor A)',
+  P0101:'Mass air flow circuit range/performance', P0102:'Mass air flow circuit low input', P0113:'Intake air temp circuit high input', P0117:'Coolant temp circuit low input', P0118:'Coolant temp circuit high input',
+  P0128:'Coolant thermostat — below regulating temperature', P0171:'System too lean (bank 1)', P0172:'System too rich (bank 1)', P0174:'System too lean (bank 2)', P0175:'System too rich (bank 2)',
+  P0300:'Random / multiple cylinder misfire detected', P0301:'Cylinder 1 misfire', P0302:'Cylinder 2 misfire', P0303:'Cylinder 3 misfire', P0304:'Cylinder 4 misfire', P0305:'Cylinder 5 misfire', P0306:'Cylinder 6 misfire',
+  P0325:'Knock sensor 1 circuit (bank 1)', P0335:'Crankshaft position sensor A circuit', P0340:'Camshaft position sensor circuit (bank 1)',
+  P0420:'Catalyst efficiency below threshold (bank 1)', P0430:'Catalyst efficiency below threshold (bank 2)',
+  P0440:'EVAP system malfunction', P0441:'EVAP incorrect purge flow', P0442:'EVAP small leak detected', P0455:'EVAP large leak detected', P0456:'EVAP very small leak detected',
+  P0500:'Vehicle speed sensor malfunction', P0505:'Idle control system malfunction', P0562:'System voltage low', P0563:'System voltage high',
+  P0700:'Transmission control system malfunction', P0705:'Transmission range sensor circuit', P0710:'Transmission fluid temperature sensor circuit', P0715:'Input/turbine speed sensor circuit',
+  P0720:'Output speed sensor circuit', P0730:'Incorrect gear ratio', P0740:'Torque converter clutch circuit', P0741:'Torque converter clutch performance / stuck off', P0746:'Pressure control solenoid A performance / stuck off',
+};
+
+/* ───────────── state & persistence ───────────── */
+const S = {
+  make: 'TOYOTA', engine: '2GR-FE', trans: 'AT',
+  units: 'imperial', pollMs: 0, showAll: false,
+  layouts: {}, chartKeys: [], custom: [],
+  slots: [], mode: 'idle', supported: null,
+  values: {}, stats: {}, history: [], dtcs: [], dtcSource: '',
+};
+const STORE = 'bayscope.v1';
+function save() {
+  try { localStorage.setItem(STORE, JSON.stringify({ make: S.make, engine: S.engine, trans: S.trans, units: S.units, pollMs: S.pollMs, showAll: S.showAll, layouts: S.layouts, chartKeys: S.chartKeys, custom: S.custom })); } catch (e) {}
+}
+function load() {
+  try {
+    const o = JSON.parse(localStorage.getItem(STORE) || 'null'); if (!o) return;
+    for (const k of ['make', 'engine', 'trans', 'units', 'pollMs', 'showAll', 'layouts', 'chartKeys', 'custom']) if (o[k] !== undefined) S[k] = o[k];
+  } catch (e) {}
+  if (!MAKES[S.make]) S.make = 'TOYOTA';
+  if (!MAKES[S.make].engines[S.engine]) S.engine = Object.keys(MAKES[S.make].engines)[0];
+  if (!MAKES[S.make].trans[S.trans]) S.trans = Object.keys(MAKES[S.make].trans)[0];
+  if (!Array.isArray(S.custom)) S.custom = [];
+}
+const profKey = () => `${S.make}|${S.engine}|${S.trans}`;
+const curEngine = () => MAKES[S.make].engines[S.engine];
+
+/* ───────────── safe formula parser (no eval) ───────────── */
+function compileExpr(src) {
+  src = String(src).trim(); if (!src) throw new Error('Formula is empty');
+  const toks = []; const re = /\s*(?:(\d+\.?\d*|\.\d+)|([A-Za-z_][A-Za-z0-9_]*)|(.))/y; let m;
+  while (re.lastIndex < src.length && (m = re.exec(src))) {
+    if (m[1] !== undefined) toks.push({ t: 'n', v: parseFloat(m[1]) });
+    else if (m[2] !== undefined) toks.push({ t: 'id', v: m[2].toUpperCase() });
+    else toks.push({ t: 'op', v: m[3] });
+  }
+  let i = 0; const peek = () => toks[i], next = () => toks[i++];
+  const FN = { S8: a => a > 127 ? a - 256 : a, S16: (a, b) => { const v = a * 256 + b; return v > 32767 ? v - 65536 : v; }, MIN: Math.min, MAX: Math.max, ABS: Math.abs };
+  function expr() { let l = term(); while (peek() && (peek().v === '+' || peek().v === '-') && peek().t === 'op') { const o = next().v, r = term(), a = l; l = o === '+' ? (v) => a(v) + r(v) : (v) => a(v) - r(v); } return l; }
+  function term() { let l = unary(); while (peek() && (peek().v === '*' || peek().v === '/') && peek().t === 'op') { const o = next().v, r = unary(), a = l; l = o === '*' ? (v) => a(v) * r(v) : (v) => a(v) / r(v); } return l; }
+  function unary() { if (peek() && peek().t === 'op' && peek().v === '-') { next(); const a = unary(); return (v) => -a(v); } return prim(); }
+  function prim() {
+    const t = next(); if (!t) throw new Error('Formula ends unexpectedly');
+    if (t.t === 'n') return () => t.v;
+    if (t.t === 'op' && t.v === '(') { const e = expr(); const c = next(); if (!c || c.v !== ')') throw new Error('Missing )'); return e; }
+    if (t.t === 'id') {
+      if (peek() && peek().v === '(') {
+        if (!FN[t.v]) throw new Error('Unknown function ' + t.v); next();
+        const args = []; if (peek() && peek().v !== ')') { do { args.push(expr()); } while (peek() && peek().v === ',' && next()); }
+        const c = next(); if (!c || c.v !== ')') throw new Error('Missing )');
+        return (v) => FN[t.v](...args.map(a => a(v)));
+      }
+      if (!/^[A-H]$/.test(t.v)) throw new Error('Unknown name ' + t.v + ' (use A–H)');
+      const idx = t.v.charCodeAt(0) - 65; return (v) => v[idx] ?? 0;
     }
+    throw new Error('Unexpected ' + t.v);
+  }
+  const f = expr(); if (i < toks.length) throw new Error('Unexpected ' + toks[i].v);
+  const probe = f([1, 2, 3, 4, 5, 6, 7, 8]); if (typeof probe !== 'number' || !isFinite(probe)) throw new Error('Formula does not produce a number');
+  return f;
+}
 
-    let isConnected = false;
-    let isSimulating = false;
-    let simInterval = null;
-    let bluetoothDevice = null;
-    let bluetoothServer = null;
-    let rxCharacteristic = null;
-    let txCharacteristic = null;
+/* ───────────── definitions lookup ───────────── */
+function customDefs() {
+  const out = [];
+  for (const c of S.custom) {
+    try {
+      out.push({ key: 'C:' + c.id, custom: true, cfg: c, name: c.name, short: c.short || c.name, unit: c.unit || '', qty: null, group: G.CUS, tag: c.tag, min: +c.min, max: +c.max, dec: +c.dec || 0, calc: compileExpr(c.formula) });
+    } catch (e) { /* skip broken */ }
+  }
+  return out;
+}
+let DEFMAP = {};
+function rebuildDefs() { DEFMAP = {}; [...STD, ...DERIVED, ...customDefs()].forEach(d => DEFMAP[d.key] = d); }
+const getDef = (k) => DEFMAP[k];
+function relevant(d) {
+  if (S.showAll) return true;
+  const e = curEngine();
+  if (d.banks2 && e.banks < 2) return false;
+  if (d.hybrid && !(e.hybrid || S.trans === 'ECVT')) return false;
+  if (d.key === 'D:RATIO' && S.trans === 'ECVT') return true;
+  return true;
+}
+function isSupported(d) { // true / false / null(unknown)
+  if (d.derived) return d.deps.every(k => isSupported(getDef(k)) !== false);
+  if (d.custom || !S.supported) return null;
+  return S.supported.has(d.key);
+}
 
-    // Data buffers for export & charts
-    let telemetryHistory = [];
-    let activeDTCs = [
-        { code: "P0700", module: "TCM / Powertrain", desc: "Transmission Control System Malfunction" }
-    ];
+/* ───────────── values, stats, derived ───────────── */
+function setValue(k, v) {
+  S.values[k] = { v, t: Date.now() };
+  const st = S.stats[k] || (S.stats[k] = { min: v, max: v, sum: 0, n: 0 });
+  if (v < st.min) st.min = v; if (v > st.max) st.max = v; st.sum += v; st.n++;
+}
+function computeDerived() {
+  for (const k of S.slots) {
+    const d = getDef(k); if (!d || !d.derived) continue;
+    const vals = {}; let ok = true;
+    for (const dep of d.deps) { const x = S.values[dep]; if (!x || Date.now() - x.t > 5000) { ok = false; break; } vals[dep] = x.v; }
+    const r = ok ? d.fn(vals) : null;
+    if (r === null || !isFinite(r)) delete S.values[k]; else setValue(k, r);
+  }
+}
+function pollKeys() {
+  const out = new Set();
+  for (const k of S.slots) { const d = getDef(k); if (!d) continue; if (d.derived) d.deps.forEach(x => out.add(x)); else out.add(k); }
+  return [...out];
+}
 
-    // Chart.js Setup
-    const ctxEngine = document.getElementById('engineChart').getContext('2d');
-    const engineChart = new Chart(ctxEngine, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                { label: 'RPM', data: [], borderColor: '#58a6ff', borderWidth: 2, pointRadius: 0, yAxisID: 'y' },
-                { label: 'Load %', data: [], borderColor: '#2ea043', borderWidth: 1.5, pointRadius: 0, yAxisID: 'y1' }
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, animation: false,
-            scales: {
-                x: { display: false },
-                y: { type: 'linear', position: 'left', grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 10 } } },
-                y1: { type: 'linear', position: 'right', max: 100, grid: { display: false }, ticks: { color: '#8b949e', font: { size: 10 } } }
-            },
-            plugins: { legend: { labels: { color: '#c9d1d9', boxWidth: 12, font: { size: 11 } } } }
-        }
-    });
-
-    const ctxTrans = document.getElementById('transChart').getContext('2d');
-    const transChart = new Chart(ctxTrans, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                { label: 'Fluid Temp (°F)', data: [], borderColor: '#d29922', borderWidth: 2, pointRadius: 0 }
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, animation: false,
-            scales: {
-                x: { display: false },
-                y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 10 } } }
-            },
-            plugins: { legend: { labels: { color: '#c9d1d9', boxWidth: 12, font: { size: 11 } } } }
-        }
-    });
-
-    function switchProfile() {
-        const make = document.getElementById('vehicleMake').value;
-        log(`Switched active diagnostic profile to: ${make}`);
-        if(make === 'TOYOTA') {
-            document.getElementById('makeEngineLbl').innerText = 'Toyota 2ZR/2GR/A750F';
-            document.getElementById('transTitle').innerText = 'ATF Fluid Temp';
-            document.getElementById('secondaryTitle').innerText = 'VVT Advance (Bank 1)';
-            document.getElementById('secUnit').innerText = '° CA';
-        } else if(make === 'NISSAN') {
-            document.getElementById('makeEngineLbl').innerText = 'Nissan VQ / QR / CVT';
-            document.getElementById('transTitle').innerText = 'CVT Fluid Temp';
-            document.getElementById('secondaryTitle').innerText = 'CVT Secondary Pressure';
-            document.getElementById('secUnit').innerText = 'MPa';
-        } else {
-            document.getElementById('makeEngineLbl').innerText = 'Generic OBD-II Powertrain';
-            document.getElementById('transTitle').innerText = 'Transmission Temp';
-            document.getElementById('secondaryTitle').innerText = 'Fuel Rail Pressure';
-            document.getElementById('secUnit').innerText = 'kPa';
-        }
+/* ───────────── dashboard rendering ───────────── */
+function renderBadge() {
+  const m = MAKES[S.make];
+  $('profileBadge').textContent = `${m.name} · ${S.engine} · ${m.trans[S.trans]}`;
+}
+function renderGrid() {
+  const g = $('grid'); g.innerHTML = '';
+  if (!S.slots.length) { g.innerHTML = '<div class="empty">Nothing on the dashboard yet. Use <b>+ Add variable</b>, or load a preset from the dropdown.</div>'; }
+  for (const k of S.slots) {
+    const d = getDef(k); if (!d) continue;
+    const c = document.createElement('div'); c.className = 'card'; c.id = 'card_' + sid(k);
+    const sub = d.derived ? 'estimated' : d.custom ? `custom · ${esc(d.cfg.req)}` : `PID ${d.key}`;
+    c.innerHTML = `<div class="card-title"><span title="${esc(d.name)}">${esc(d.short)}</span><span class="card-tools"><label title="Plot on chart"><input type="checkbox" data-chart="${esc(k)}" ${S.chartKeys.includes(k) ? 'checked' : ''}>chart</label><button class="x" data-remove="${esc(k)}" title="Remove from dashboard">×</button></span></div>
+      <div><span class="metric-value" id="${sid(k)}_v">--</span><span class="metric-unit" id="${sid(k)}_u">${esc(disp(d, d.min).unit)}</span></div>
+      <div class="bar"><i id="${sid(k)}_b"></i></div>
+      <div class="metric-sub" id="${sid(k)}_s">${sub}</div>`;
+    g.appendChild(c);
+  }
+  $('slotCount').textContent = `${S.slots.length} / ${MAX_SLOTS} variables`;
+  updateCards();
+}
+function updateCards() {
+  for (const k of S.slots) {
+    const d = getDef(k); if (!d) continue; const x = S.values[k];
+    const vEl = $(sid(k) + '_v'); if (!vEl) continue;
+    const card = $('card_' + sid(k));
+    $(sid(k) + '_u').textContent = disp(d, d.min).unit;
+    if (x && Date.now() - x.t < 8000) {
+      const f = fmt(d, x.v); vEl.textContent = f.text; card.classList.remove('na');
+      const [lo, hi] = dispRange(d); const p = Math.max(0, Math.min(100, (f.n - lo) / (hi - lo) * 100));
+      $(sid(k) + '_b').style.width = p + '%';
+      const st = S.stats[k]; if (st && st.n > 1) { const a = fmt(d, st.min).text, b = fmt(d, st.max).text; $(sid(k) + '_s').textContent = `session ${a} – ${b}`; }
+    } else {
+      vEl.textContent = '--'; $(sid(k) + '_b').style.width = '0';
+      const sup = isSupported(d); card.classList.toggle('na', S.mode === 'live' && sup === false);
+      if (S.mode === 'live' && sup === false) $(sid(k) + '_s').textContent = 'not reported by this car';
     }
+  }
+  const mode = S.mode === 'sim' ? 'sim' : S.mode === 'live' ? 'live' : '';
+  $('connectionStatus').className = 'status-pill ' + mode;
+  $('connectionStatus').title = S.mode === 'sim' ? 'Simulation (fake data)' : S.mode === 'live' ? 'Connected' : 'Not connected';
+}
 
-    function log(msg) {
-        const term = document.getElementById('terminalLog');
-        const time = new Date().toLocaleTimeString();
-        term.innerHTML += `[${time}] ${msg}<br>`;
-        term.scrollTop = term.scrollHeight;
+/* ───────────── chart ───────────── */
+let chart = null; const COLORS = ['#58a6ff', '#2ea043', '#d29922', '#f778ba'];
+function buildChart() {
+  if (typeof Chart === 'undefined') { return; }
+  if (chart) chart.destroy();
+  S.chartKeys = S.chartKeys.filter(k => S.slots.includes(k)).slice(0, MAX_CHART);
+  chart = new Chart($('liveChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: [], datasets: S.chartKeys.map((k, i) => { const d = getDef(k); return { label: `${d.short} (${disp(d, d.min).unit})`, key: k, raw: [], data: [], borderColor: COLORS[i % 4], borderWidth: 2, pointRadius: 0, tension: .15 }; }) },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { display: false }, y: { min: 0, max: 100, grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 10 }, callback: v => v + '%' } } },
+      plugins: { legend: { labels: { color: '#c9d1d9', boxWidth: 12, font: { size: 11 } } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.dataset.raw[c.dataIndex]}` } } } }
+  });
+}
+function pushChart() {
+  if (!chart) return;
+  let any = false; const label = new Date().toLocaleTimeString();
+  chart.data.datasets.forEach(ds => {
+    const d = getDef(ds.key), x = S.values[ds.key]; if (!x) { ds.data.push(null); ds.raw.push('--'); return; }
+    const f = fmt(d, x.v), [lo, hi] = dispRange(d); ds.data.push(Math.max(0, Math.min(100, (f.n - lo) / (hi - lo) * 100))); ds.raw.push(f.text); any = true;
+  });
+  chart.data.labels.push(label);
+  if (chart.data.labels.length > 90) { chart.data.labels.shift(); chart.data.datasets.forEach(ds => { ds.data.shift(); ds.raw.shift(); }); }
+  chart.update('none');
+}
+
+/* ───────────── recording ───────────── */
+let cycleTimes = [];
+function finishCycle() {
+  computeDerived(); updateCards(); pushChart();
+  const row = { ts: new Date().toISOString(), sim: S.mode === 'sim', vals: {} };
+  let n = 0; for (const k of S.slots) { const x = S.values[k]; if (x) { row.vals[k] = x.v; n++; } }
+  if (n) { S.history.push(row); if (S.history.length > 20000) S.history.shift(); }
+  const now = performance.now(); cycleTimes.push(now); cycleTimes = cycleTimes.filter(t => now - t < 5000);
+  if (cycleTimes.length > 2) $('rateInfo').textContent = `refresh ≈ ${((cycleTimes.length - 1) / ((now - cycleTimes[0]) / 1000)).toFixed(1)} Hz`;
+  if ($('view-data').classList.contains('active')) renderHistInfo();
+}
+
+/* ───────────── simulation ───────────── */
+let simTimer = null, simT = 0;
+const hash = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+function simVal(d, t) {
+  const spd = Math.max(0, 48 + 42 * Math.sin(t / 14));
+  const noise = (a) => (Math.random() - .5) * a;
+  switch (d.key) {
+    case '010D': return spd;
+    case '010C': return Math.max(650, 780 + spd * 31 + noise(60));
+    case '0104': return Math.min(95, 16 + spd * .45 + noise(3));
+    case '0143': return Math.min(100, 20 + spd * .5 + noise(3));
+    case '0105': return Math.min(89, 38 + simT * .8) + noise(.6);
+    case '0111': return Math.min(90, 12 + spd * .35 + noise(2));
+    case '0110': return Math.max(2.5, 3 + spd * .22 + noise(.6));
+    case '010B': return 30 + spd * .5 + noise(2);
+    case '0142': return 14.1 + Math.sin(t / 9) * .15 + noise(.05);
+    case '011F': return Math.floor(t);
+    case '0124': case '0125': case '0128': case '0129': return 1 + Math.sin(t / 3) * .015 + noise(.01);
+    case '0114': case '0118': return .45 + Math.sin(t * 1.6) * .4;
+    case '0115': case '0119': return .62 + noise(.05);
+  }
+  const mid = (d.min + d.max) / 2, amp = (d.max - d.min) * (d.key.match(/^01(06|07|08|09|2D)$/) ? .06 : .12);
+  const h = hash(d.key); return mid + amp * Math.sin(t / (5 + h % 9) + h) + noise(amp * .25);
+}
+function simTick() {
+  simT += .5;
+  for (const k of pollKeys()) { const d = getDef(k); if (d && !d.derived) setValue(k, simVal(d, simT)); }
+  finishCycle();
+}
+function newSession() { S.history = []; S.stats = {}; S.values = {}; S.dtcs = []; S.dtcSource = ''; S.supported = null; cycleTimes = []; $('rateInfo').textContent = ''; renderDtc(); }
+function startSim() {
+  if (S.mode === 'live') { toast('Disconnect the adapter first.', true); return; }
+  newSession(); S.mode = 'sim'; simT = 0;
+  simTimer = setInterval(simTick, 500);
+  $('simBtn').textContent = 'Stop Sim'; $('simBtn').classList.add('active');
+  log('Simulation started — all values are FAKE.'); setUI();
+}
+function stopSim() {
+  clearInterval(simTimer); simTimer = null; S.mode = 'idle';
+  $('simBtn').textContent = 'Start Sim'; $('simBtn').classList.remove('active');
+  log('Simulation stopped.'); setUI();
+}
+
+/* ───────────── adapter link (Web Bluetooth + ELM327 command set) ───────────── */
+const BLE_SERVICES = [0xFFE0, 0xFFF0, 0x18F0, 0xAE00, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000fff0-0000-1000-8000-00805f9b34fb'];
+const L = { dev: null, tx: null, rx: null, buf: '', pending: null, q: Promise.resolve(), hdr: '7DF', run: false, nd: {}, cycle: 0, timeouts: 0 };
+const enc = new TextEncoder(), dec = new TextDecoder();
+function onRx(e) {
+  L.buf += dec.decode(e.target.value);
+  const i = L.buf.indexOf('>');
+  if (i >= 0 && L.pending) { const raw = L.buf.slice(0, i); L.buf = L.buf.slice(i + 1); const p = L.pending; L.pending = null; clearTimeout(p.timer); p.resolve(raw); }
+}
+function rawSend(cmd, timeout) {
+  return new Promise((resolve, reject) => {
+    if (!L.tx) return reject(new Error('not connected'));
+    L.buf = '';
+    L.pending = { resolve, timer: setTimeout(() => { L.pending = null; reject(new Error('timeout')); }, timeout) };
+    log('→ ' + cmd, 'tx');
+    (async () => {
+      try {
+        const data = enc.encode(cmd + '\r'); const noResp = L.tx.properties.writeWithoutResponse;
+        for (let o = 0; o < data.length; o += 20) { const chunk = data.slice(o, o + 20); if (noResp) await L.tx.writeValueWithoutResponse(chunk); else await L.tx.writeValue(chunk); }
+      } catch (e) { clearTimeout(L.pending && L.pending.timer); L.pending = null; reject(e); }
+    })();
+  });
+}
+function sendCmd(cmd, timeout = 3000) { const p = L.q.then(() => rawSend(cmd, timeout)); L.q = p.catch(() => {}); return p.then(r => { const t = r.replace(/\r/g, '\n').split('\n').map(s => s.trim()).filter(Boolean); log('← ' + t.join(' | ')); return t; }); }
+async function setHdr(h) { if (L.hdr !== h) { await sendCmd('ATSH' + h); L.hdr = h; } }
+const ERR_RE = /(NO DATA|UNABLE TO CONNECT|CAN ERROR|BUS BUSY|BUS ERROR|STOPPED|BUFFER FULL|DATA ERROR|FB ERROR|LV RESET|^\?$)/i;
+/* Turn adapter text lines into a list of hex messages (handles multi-frame "0:/1:" output). */
+function toMessages(lines) {
+  const ls = lines.filter(l => !/^SEARCHING|^BUS INIT|^OK$/i.test(l));
+  for (const l of ls) if (ERR_RE.test(l)) return { err: l, msgs: [] };
+  const clean = ls.map(l => l.replace(/\s+/g, '').toUpperCase()).filter(l => /^[0-9A-F:]+$/.test(l) && !/^[0-9A-F]{3}$/.test(l));
+  const msgs = []; let multi = null;
+  for (const l of clean) {
+    const m = l.match(/^([0-9A-F]):(.*)$/);
+    if (m) { if (m[1] === '0') { if (multi !== null) msgs.push(multi); multi = m[2]; } else if (multi !== null) multi += m[2]; }
+    else { if (multi !== null) { msgs.push(multi); multi = null; } msgs.push(l); }
+  }
+  if (multi !== null) msgs.push(multi);
+  return { err: null, msgs };
+}
+const bytesOf = (hex) => hex.match(/.{2}/g)?.map(h => parseInt(h, 16)) || [];
+async function queryStd(d) {
+  await setHdr('7DF');
+  const r = toMessages(await sendCmd(d.key));
+  if (r.err) return { err: r.err };
+  const pre = '41' + d.pid; const m = r.msgs.find(x => x.startsWith(pre)); if (!m) return { err: 'no matching reply' };
+  const b = bytesOf(m.slice(pre.length)); if (b.length < d.n) return { err: 'short reply' };
+  return { v: d.fn(...b) };
+}
+async function queryCustom(d) {
+  const c = d.cfg; await setHdr((c.header || '7DF').toUpperCase());
+  const r = toMessages(await sendCmd(c.req.toUpperCase(), 3500));
+  if (r.err) return { err: r.err };
+  const reqB = bytesOf(c.req); const pre = ((reqB[0] + 0x40).toString(16).toUpperCase().padStart(2, '0')) + c.req.slice(2).toUpperCase();
+  const m = r.msgs.find(x => x.startsWith(pre)); if (!m) return { err: 'no matching reply' };
+  const b = bytesOf(m.slice(pre.length)); if (!b.length) return { err: 'empty reply' };
+  const v = d.calc(b); return isFinite(v) ? { v } : { err: 'bad formula result' };
+}
+async function readSupported() {
+  if (S.mode !== 'live') { toast('Connect an adapter first.', true); return; }
+  const sup = new Set(); log('Reading the list of PIDs your car supports…');
+  for (let base = 0; base <= 0xA0; base += 0x20) {
+    const bs = base.toString(16).toUpperCase().padStart(2, '0'); await setHdr('7DF');
+    const r = toMessages(await sendCmd('01' + bs, 5000)); if (r.err) break;
+    const m = r.msgs.find(x => x.startsWith('41' + bs)); if (!m) break;
+    const b = bytesOf(m.slice(4)); if (b.length < 4) break;
+    for (let i = 0; i < 32; i++) if (b[i >> 3] & (0x80 >> (i & 7))) sup.add('01' + (base + i + 1).toString(16).toUpperCase().padStart(2, '0'));
+    if (!(b[3] & 1)) break;
+  }
+  S.supported = sup; log(`Car reports ${sup.size} standard variables.`); renderVariables(); updateCards();
+  toast(`Your car reports ${sup.size} standard variables.`);
+}
+async function connectLive() {
+  if (!navigator.bluetooth) { toast('Web Bluetooth is not available here. Use Chrome or Edge (desktop) or Chrome on Android.', true); return; }
+  if (S.mode === 'sim') stopSim();
+  try {
+    log('Choose your adapter in the pairing prompt…');
+    const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
+    L.dev = dev; dev.addEventListener('gattserverdisconnected', () => { if (S.mode === 'live') { log('Adapter dropped the connection.', 'err'); teardown(); } });
+    log(`Connecting to ${dev.name || 'adapter'}…`);
+    const server = await dev.gatt.connect();
+    const services = await server.getPrimaryServices(); let pick = null, fb = { rx: null, tx: null };
+    for (const s of services) {
+      let rx = null, tx = null; for (const c of await s.getCharacteristics()) { const p = c.properties; if (!rx && (p.notify || p.indicate)) rx = c; if (!tx && (p.write || p.writeWithoutResponse)) tx = c; }
+      if (rx && tx && !pick) pick = { rx, tx }; fb.rx = fb.rx || rx; fb.tx = fb.tx || tx;
     }
-
-    // Web Bluetooth connection for ELM327 / OBDLink MX+
-    async function toggleBluetooth() {
-        if(isConnected) {
-            if(bluetoothServer) bluetoothServer.disconnect();
-            setConnected(false);
-            log("Disconnected from OBDLink MX+.");
-            return;
-        }
-
-        try {
-            log("Requesting Bluetooth Device (OBDLink MX+)...");
-            const device = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'OBD' }, { namePrefix: 'Link' }, { namePrefix: 'ELM' }],
-                optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
-            });
-
-            bluetoothDevice = device;
-            log(`Connecting to ${device.name}...`);
-            const server = await device.gatt.connect();
-            bluetoothServer = server;
-            
-            // Standard ELM327 BLE service discovery can be mapped here
-            setConnected(true);
-            log("Connected successfully to OBDLink MX+!");
-            initOBDLink();
-        } catch(error) {
-            log("BLE Connection Error: " + error);
-            // Fallback simulation notice if user cancels prompt
-        }
+    pick = pick || (fb.rx && fb.tx ? fb : null);
+    if (!pick) throw new Error('No serial-style (notify + write) characteristic found on this device. It may be a Bluetooth Classic-only adapter, which Web Bluetooth cannot use.');
+    L.rx = pick.rx; L.tx = pick.tx; await L.rx.startNotifications(); L.rx.addEventListener('characteristicvaluechanged', onRx);
+    L.hdr = '7DF'; L.nd = {}; L.cycle = 0; L.timeouts = 0; L.q = Promise.resolve();
+    newSession(); S.mode = 'live'; setUI();
+    for (const c of ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0']) await sendCmd(c, c === 'ATZ' ? 6000 : 3000);
+    log('Looking for the car\'s protocol (can take several seconds; ignition must be ON)…');
+    const t = await sendCmd('0100', 15000); const r = toMessages(t);
+    if (r.err || !r.msgs.some(x => x.startsWith('4100'))) throw new Error('The car did not answer (' + (r.err || 'no reply') + '). Is the ignition on and the adapter fully seated?');
+    try { log('Protocol: ' + (await sendCmd('ATDP')).join(' ')); log('Adapter voltage: ' + (await sendCmd('ATRV')).join(' ')); } catch (e) {}
+    toast('Connected.'); readSupported().catch(() => {});
+    pollLoop();
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') log('Pairing cancelled.'); else { log('Connection failed: ' + (e.message || e), 'err'); toast('Connection failed: ' + (e.message || e), true); }
+    teardown();
+  }
+}
+function teardown() {
+  L.run = false; try { if (L.rx) L.rx.removeEventListener('characteristicvaluechanged', onRx); } catch (e) {}
+  try { if (L.dev && L.dev.gatt.connected) L.dev.gatt.disconnect(); } catch (e) {}
+  L.dev = L.rx = L.tx = null; if (S.mode === 'live') S.mode = 'idle'; setUI();
+}
+async function pollLoop() {
+  if (L.run) return; L.run = true;
+  while (L.run && S.mode === 'live') {
+    const keys = pollKeys(); if (!keys.length) { await sleep(400); continue; }
+    L.cycle++;
+    for (const k of keys) {
+      if (!L.run) break; const d = getDef(k); if (!d) continue;
+      if ((L.nd[k] || 0) >= 3 && L.cycle % 20) continue;       // back off on variables the car doesn't answer
+      try {
+        const r = d.custom ? await queryCustom(d) : await queryStd(d); L.timeouts = 0;
+        if (r.err) { L.nd[k] = (L.nd[k] || 0) + 1; if (L.nd[k] === 3) log(`${d.short}: no data from car — polling it less often.`); }
+        else { L.nd[k] = 0; setValue(k, r.v); }
+      } catch (e) {
+        if (!L.run) break;
+        if (++L.timeouts > 4) { log('Adapter stopped responding — disconnecting.', 'err'); toast('Adapter stopped responding.', true); teardown(); return; }
+      }
     }
+    if (L.run) { finishCycle(); if (S.pollMs) await sleep(S.pollMs); }
+  }
+}
+async function rawCommand() {
+  const v = $('rawCmd').value.trim(); if (!v) return;
+  if (S.mode !== 'live') { toast('Connect an adapter first.', true); return; }
+  try { await sendCmd(v, 6000); } catch (e) { log('Command failed: ' + e.message, 'err'); }
+}
 
-    function setConnected(status) {
-        isConnected = status;
-        const pill = document.getElementById('connectionStatus');
-        const btn = document.getElementById('btConnectBtn');
-        if(status) {
-            pill.classList.add('connected');
-            btn.innerText = 'Disconnect';
-            btn.classList.add('active');
-        } else {
-            pill.classList.remove('connected');
-            btn.innerText = 'Connect MX+';
-            btn.classList.remove('active');
-        }
+/* ───────────── trouble codes ───────────── */
+function decodeDtcs(msgs, resp) {
+  const out = [];
+  for (const m of msgs) {
+    if (!m.startsWith(resp)) continue; let b = bytesOf(m.slice(2)); if (b.length % 2 === 1) b = b.slice(1);   // CAN responses carry a count byte
+    for (let i = 0; i + 1 < b.length; i += 2) {
+      const hi = b[i], lo = b[i + 1]; if (!hi && !lo) continue;
+      out.push('PCBU'[hi >> 6] + ((hi >> 4) & 3) + (hi & 15).toString(16).toUpperCase() + lo.toString(16).toUpperCase().padStart(2, '0'));
     }
+  }
+  return [...new Set(out)];
+}
+const DTC_KIND = { '03': 'Stored', '07': 'Pending', '0A': 'Permanent' };
+async function scanDtc(mode) {
+  if (S.mode === 'sim') {
+    S.dtcs = [{ code: 'P0420', kind: DTC_KIND[mode] }]; S.dtcSource = 'SIMULATED — not from a car'; renderDtc(); return;
+  }
+  if (S.mode !== 'live') { toast('Connect an adapter to read codes.', true); return; }
+  try {
+    await setHdr('7DF'); const r = toMessages(await sendCmd(mode, 8000));
+    const resp = (parseInt(mode, 16) + 0x40).toString(16).toUpperCase().padStart(2, '0');
+    if (r.err && !/NO DATA/i.test(r.err)) throw new Error(r.err);
+    const codes = r.err ? [] : decodeDtcs(r.msgs, resp);
+    S.dtcs = codes.map(c => ({ code: c, kind: DTC_KIND[mode] })); S.dtcSource = `read from car at ${new Date().toLocaleTimeString()}`;
+    log(`${DTC_KIND[mode]} codes: ${codes.join(', ') || 'none'}`); renderDtc();
+  } catch (e) { toast('Could not read codes: ' + e.message, true); log('DTC read failed: ' + e.message, 'err'); }
+}
+function renderDtc() {
+  $('dtcSource').textContent = S.dtcSource;
+  $('dtcBody').innerHTML = S.dtcs.length ? S.dtcs.map(x => `<tr><td><b style="color:var(--red)">${esc(x.code)}</b></td><td>${esc(x.kind)}</td><td>${esc(DTC[x.code] || 'Not in the built-in list — search the code for your model.')}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="muted" style="text-align:center">No codes reported.</td></tr>';
+}
 
-    async function initOBDLink() {
-        log("Initializing ELM327 AT command set: AT Z, AT E0, AT SP 0");
-        // Real implementation writes to txCharacteristic here
-    }
+/* ───────────── pickers & views ───────────── */
+function addSlot(k) {
+  if (S.slots.includes(k)) return; if (S.slots.length >= MAX_SLOTS) { toast(`Dashboard is full (${MAX_SLOTS}). Remove one first.`, true); return; }
+  S.slots.push(k); commitLayout();
+}
+function removeSlot(k) { S.slots = S.slots.filter(x => x !== k); S.chartKeys = S.chartKeys.filter(x => x !== k); delete S.values[k]; commitLayout(); }
+function commitLayout() { S.layouts[profKey()] = S.slots.slice(); save(); renderGrid(); buildChart(); renderVariables(); }
+function applyPreset(id, quiet) {
+  const p = PRESETS.find(x => x.id === id); if (!p) return;
+  let keys = p.keys.filter(k => { const d = getDef(k); return d && relevant(d); });
+  if (S.supported) keys = keys.filter(k => isSupported(getDef(k)) !== false);
+  if (p.custom) keys = keys.concat(customDefs().filter(d => d.tag === p.custom).map(d => d.key));
+  S.slots = [...new Set(keys)].slice(0, MAX_SLOTS); S.chartKeys = S.chartKeys.filter(k => S.slots.includes(k));
+  if (!S.chartKeys.length) S.chartKeys = S.slots.filter(k => !getDef(k).derived).slice(0, 2);
+  commitLayout(); if (!quiet) { toast(`Loaded “${p.name}” (${S.slots.length} variables).`); showView('dashboard'); }
+}
+function renderVariables() {
+  const q = $('varSearch').value.trim().toLowerCase(), grp = $('varGroup').value, supOnly = $('varSupOnly').checked && S.supported;
+  $('varSupOnly').disabled = !S.supported; $('readSupBtn').disabled = S.mode !== 'live';
+  $('varIntro').textContent = `${S.slots.length} of ${MAX_SLOTS} dashboard slots used. Showing standard variables suited to ${S.engine} / ${MAKES[S.make].trans[S.trans]}${S.supported ? ' — tagged against what your car reports' : ''}.`;
+  const defs = [...STD, ...DERIVED, ...customDefs()].filter(d => relevant(d) && (!grp || d.group === grp) && (!q || (d.name + ' ' + d.short + ' ' + d.key).toLowerCase().includes(q)) && (!supOnly || isSupported(d) !== false));
+  let html = '';
+  for (const d of defs) {
+    const on = S.slots.includes(d.key), sup = isSupported(d);
+    const tags = [`<span class="tag">${esc(d.group)}</span>`, d.custom ? '' : `<span class="tag">${d.derived ? 'calculated' : 'PID ' + d.pid}</span>`,
+      sup === true ? '<span class="tag ok">your car ✓</span>' : sup === false ? '<span class="tag no">not reported</span>' : '',
+      d.est ? '<span class="tag warn">est.</span>' : '', d.unv ? '<span class="tag warn">unverified</span>' : ''].join('');
+    html += `<div class="picker-row"><div><div class="nm">${esc(d.name)} ${tags}</div>${d.note ? `<div class="muted">${esc(d.note)}</div>` : ''}</div>
+      <button data-pick="${esc(d.key)}" class="${on ? 'active' : ''}">${on ? 'On dashboard · Remove' : 'Add'}</button></div>`;
+  }
+  if (!defs.length) html = '<div class="empty">No variables match.</div>';
+  const tplKey = S.trans, list = (ENH[S.make] ? [...(ENH[S.make].engine || []).map(n => [n, 'engine']), ...(ENH[S.make][tplKey] || []).map(n => [n, 'trans'])] : []);
+  if (list.length && !grp && !q) {
+    html += `<h3 style="margin-top:1.4rem">${esc(MAKES[S.make].name)}-specific variables for this setup <span class="tag warn">definition needed</span></h3>
+      <p class="muted">These exist on this kind of platform (names as factory-level tools show them) but BayScope can't ship verified request/byte definitions. “Define” opens the Custom PIDs form pre-filled with the name.</p>`;
+    html += list.map(([n, tag]) => `<div class="picker-row"><div class="nm">${esc(n)} <span class="tag">${tag === 'trans' ? 'Transmission' : 'Engine'}</span></div><button data-define="${esc(n)}" data-tag="${tag}">Define…</button></div>`).join('');
+  }
+  $('varList').innerHTML = html;
+}
+function renderPresets() {
+  $('presetList').innerHTML = PRESETS.map(p => `<div class="preset"><div><b>${esc(p.name)}</b><div class="muted">${esc(p.why)}</div></div><button class="primary" data-preset="${p.id}">Load</button></div>`).join('');
+  $('quickPreset').innerHTML = '<option value="">Load a scan target…</option>' + PRESETS.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+}
+function renderVehicle() {
+  const mk = $('selMake'), en = $('selEngine'), tr = $('selTrans');
+  mk.innerHTML = Object.entries(MAKES).map(([k, m]) => `<option value="${k}" ${k === S.make ? 'selected' : ''}>${m.name}</option>`).join('');
+  en.innerHTML = Object.entries(MAKES[S.make].engines).map(([k, e]) => `<option value="${k}" ${k === S.engine ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+  tr.innerHTML = Object.entries(MAKES[S.make].trans).map(([k, n]) => `<option value="${k}" ${k === S.trans ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const e = curEngine();
+  $('profileSummary').innerHTML = `<b>${esc(MAKES[S.make].name)}</b> · ${esc(e.name)} · ${esc(MAKES[S.make].trans[S.trans])}<br><span class="muted">${e.banks > 1 ? 'Two cylinder banks — bank 1 and bank 2 variables are offered.' : 'Single bank — bank 2 variables are hidden.'}${e.hybrid ? ' Hybrid variables are offered.' : ''} The profile only filters which variables are suggested; every reading comes from your car.</span>`;
+}
+function changeProfile(make, engine, trans) {
+  if (make !== undefined) { S.make = make; S.engine = Object.keys(MAKES[make].engines)[0]; S.trans = Object.keys(MAKES[make].trans)[0]; }
+  if (engine) S.engine = engine; if (trans) S.trans = trans;
+  S.values = {}; S.stats = {};
+  const saved = S.layouts[profKey()]; renderBadge(); renderVehicle();
+  if (saved) { S.slots = saved.filter(k => getDef(k)); commitLayout(); } else applyPreset('health', true);
+  save();
+}
+function renderCustom() {
+  const l = S.custom; $('customList').innerHTML = l.length ? l.map(c => `<div class="picker-row"><div><div class="nm">${esc(c.name)} <span class="tag">${esc(c.tag)}</span></div><div class="muted">hdr ${esc(c.header || '7DF')} · req ${esc(c.req)} · ${esc(c.formula)} ${esc(c.unit)}</div></div>
+    <div><button data-editc="${esc(c.id)}">Edit</button> <button class="danger" data-delc="${esc(c.id)}">Delete</button></div></div>`).join('') : '<p class="muted">None yet.</p>';
+}
+let editingId = null;
+function fillCustomForm(c) {
+  $('cName').value = c.name || ''; $('cShort').value = c.short || ''; $('cUnit').value = c.unit || ''; $('cTag').value = c.tag || 'engine';
+  $('cHdr').value = c.header || ''; $('cReq').value = c.req || ''; $('cFormula').value = c.formula || ''; $('cMin').value = c.min ?? 0; $('cMax').value = c.max ?? 100; $('cDec').value = c.dec ?? 0;
+  $('customFormTitle').textContent = editingId ? 'Edit custom variable' : 'New custom variable';
+}
+function saveCustom() {
+  const c = { id: editingId || ('c' + Date.now().toString(36)), name: $('cName').value.trim(), short: $('cShort').value.trim(), unit: $('cUnit').value.trim(), tag: $('cTag').value,
+    header: $('cHdr').value.trim().toUpperCase(), req: $('cReq').value.replace(/\s+/g, '').toUpperCase(), formula: $('cFormula').value.trim(), min: +$('cMin').value, max: +$('cMax').value, dec: Math.max(0, Math.min(4, +$('cDec').value || 0)) };
+  if (!c.name) return toast('Give it a name.', true);
+  if (!/^([0-9A-F]{2}){1,6}$/.test(c.req)) return toast('Request must be hex bytes, e.g. 2101.', true);
+  if (!c.req.startsWith('01') && !/^[0-9A-F]{3}$/.test(c.header)) return toast('Non-standard requests need the module\'s 3-digit CAN header (e.g. 7E1).', true);
+  if (c.header && !/^[0-9A-F]{3}$/.test(c.header)) return toast('Header must be 3 hex digits for 11-bit CAN.', true);
+  if (!(c.max > c.min)) return toast('Gauge max must be above min.', true);
+  try { compileExpr(c.formula); } catch (e) { return toast('Formula problem: ' + e.message, true); }
+  const i = S.custom.findIndex(x => x.id === c.id); if (i >= 0) S.custom[i] = c; else S.custom.push(c);
+  editingId = null; rebuildDefs(); save(); renderCustom(); renderVariables(); fillCustomForm({}); toast('Saved. Find it under Variables.');
+}
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + v));
+  document.querySelectorAll('#drawer [data-view]').forEach(b => b.classList.toggle('cur', b.dataset.view === v));
+  $('drawer').classList.remove('open'); $('scrim').classList.remove('open');
+  if (v === 'variables') renderVariables(); if (v === 'codes') renderDtc(); if (v === 'data') renderHistInfo();
+  if (v === 'settings') { $('setUnits').value = S.units; $('setPoll').value = S.pollMs; $('setShowAll').checked = S.showAll; }
+  if (v === 'dashboard' && chart) chart.resize();
+  try { history.replaceState(null, '', '#' + v); } catch (e) {}
+}
+function setUI() {
+  const btn = $('btConnectBtn'); btn.textContent = S.mode === 'live' ? 'Disconnect' : 'Connect adapter'; btn.classList.toggle('active', S.mode === 'live');
+  $('readSupBtn').disabled = S.mode !== 'live'; updateCards(); renderVariables();
+}
 
-    // Realistic Simulation Mode for Testing without vehicle present
-    function toggleSimulation() {
-        if(isSimulating) {
-            clearInterval(simInterval);
-            isSimulating = false;
-            document.getElementById('simBtn').innerText = 'Start Sim';
-            document.getElementById('simBtn').classList.remove('active');
-            setConnected(false);
-            log("Simulation stopped.");
-            return;
-        }
+/* ───────────── export ───────────── */
+function renderHistInfo() {
+  const sim = S.history.some(r => r.sim);
+  $('histInfo').textContent = S.history.length ? `${S.history.length} samples recorded this session${sim ? ' (includes SIMULATED data)' : ''}.` : 'Nothing recorded yet — samples are logged while the simulator or an adapter is running.';
+}
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function exportCSV() {
+  if (!S.history.length) return toast('No data recorded yet.', true);
+  const keys = [...new Set(S.history.flatMap(r => Object.keys(r.vals)))];
+  const head = ['timestamp', 'simulated', ...keys.map(k => { const d = getDef(k); return d ? `${d.name} (${disp(d, d.min).unit})` : k; })];
+  const q = (s) => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  const rows = S.history.map(r => [r.ts, r.sim ? 'yes' : 'no', ...keys.map(k => { const d = getDef(k); return (r.vals[k] === undefined || !d) ? '' : fmt(d, r.vals[k]).text; })].map(q).join(','));
+  download(`bayscope_${S.make.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`, [head.map(q).join(','), ...rows].join('\n'), 'text/csv;charset=utf-8');
+  log('CSV exported.');
+}
+function aiPrompt() {
+  const sim = S.history.some(r => r.sim); const m = MAKES[S.make];
+  let t = `### Vehicle diagnostic summary\n- Vehicle: ${m.name}, engine ${curEngine().name}, transmission ${m.trans[S.trans]}\n`;
+  if (sim) t += '- WARNING: this session includes SIMULATED data, not a real vehicle.\n';
+  t += `- Trouble codes: ${S.dtcs.length ? S.dtcs.map(d => `${d.code} (${DTC[d.code] || d.kind})`).join(', ') + ' — ' + S.dtcSource : 'none read this session'}\n- Samples: ${S.history.length}\n- Variable statistics (min / avg / max):\n`;
+  for (const [k, st] of Object.entries(S.stats)) { const d = getDef(k); if (!d || !st.n) continue; const a = fmt(d, st.min), b = fmt(d, st.sum / st.n), c = fmt(d, st.max); t += `  - ${d.name}: ${a.text} / ${b.text} / ${c.text} ${a.unit}\n`; }
+  t += '\nPlease interpret these readings, point out anything that looks abnormal for this engine and transmission, and suggest the next diagnostic steps.';
+  return t;
+}
+async function copyAI() {
+  const t = aiPrompt();
+  try { await navigator.clipboard.writeText(t); toast('Copied. Paste it into your AI chat.'); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Copied.'); } catch (x) { toast('Copy failed.', true); } ta.remove(); }
+}
+function exportCfg() { download('bayscope-settings.json', JSON.stringify({ app: 'bayscope', version: 1, custom: S.custom, layouts: S.layouts, units: S.units }, null, 1), 'application/json'); }
+function importCfg(text) {
+  try {
+    const o = JSON.parse(text); if (o.app !== 'bayscope') throw new Error('not a BayScope file');
+    const custom = (o.custom || []).filter(c => c && typeof c.id === 'string' && typeof c.name === 'string' && /^([0-9A-F]{2}){1,6}$/i.test(c.req || ''));
+    custom.forEach(c => compileExpr(c.formula));
+    S.custom = custom; S.layouts = (o.layouts && typeof o.layouts === 'object') ? o.layouts : {}; if (o.units === 'metric' || o.units === 'imperial') S.units = o.units;
+    rebuildDefs(); save(); changeProfile(); renderCustom(); toast('Settings imported.');
+  } catch (e) { toast('Import failed: ' + e.message, true); }
+}
 
-        isSimulating = true;
-        document.getElementById('simBtn').innerText = 'Stop Sim';
-        document.getElementById('simBtn').classList.add('active');
-        setConnected(true);
-        log("Simulation started with Toyota/Nissan profile curves.");
+/* ───────────── wiring ───────────── */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act],[data-view],[data-pick],[data-remove],[data-preset],[data-define],[data-editc],[data-delc]'); if (!t) return;
+  const D = t.dataset;
+  if (D.view && t.closest('#drawer, .toolbar')) return showView(D.view);
+  if (D.pick) { S.slots.includes(D.pick) ? removeSlot(D.pick) : addSlot(D.pick); return; }
+  if (D.remove) return removeSlot(D.remove);
+  if (D.preset) return applyPreset(D.preset);
+  if (D.define) { editingId = null; fillCustomForm({ name: D.define, short: D.define.split(' (')[0], tag: D.tag }); showView('custom'); $('cReq').focus(); return; }
+  if (D.editc) { editingId = D.editc; fillCustomForm(S.custom.find(c => c.id === D.editc) || {}); window.scrollTo(0, 0); return; }
+  if (D.delc) { S.custom = S.custom.filter(c => c.id !== D.delc); S.slots = S.slots.filter(k => k !== 'C:' + D.delc); rebuildDefs(); save(); renderCustom(); commitLayout(); return; }
+  switch (D.act) {
+    case 'menu': $('drawer').classList.toggle('open'); $('scrim').classList.toggle('open', $('drawer').classList.contains('open')); break;
+    case 'connect': S.mode === 'live' ? (log('Disconnected.'), teardown()) : connectLive(); break;
+    case 'sim': S.mode === 'sim' ? stopSim() : startSim(); break;
+    case 'readSupported': readSupported().catch(err => toast('Read failed: ' + err.message, true)); break;
+    case 'scan': scanDtc(D.mode); break;
+    case 'saveCustom': saveCustom(); break;
+    case 'clearCustomForm': editingId = null; fillCustomForm({}); break;
+    case 'rawSend': rawCommand(); break;
+    case 'clearLog': $('terminalLog').innerHTML = ''; break;
+    case 'csv': exportCSV(); break;
+    case 'ai': copyAI(); break;
+    case 'clearSession': S.history = []; S.stats = {}; S.values = {}; renderHistInfo(); updateCards(); toast('Session data cleared.'); break;
+    case 'exportCfg': exportCfg(); break;
+    case 'importCfg': $('cfgFile').click(); break;
+    case 'resetLayout': delete S.layouts[profKey()]; applyPreset('health', true); toast('Dashboard reset.'); break;
+    case 'wipe': if (confirm('Erase all saved BayScope data on this device?')) { try { localStorage.removeItem(STORE); } catch (x) {} location.reload(); } break;
+  }
+});
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.dataset.chart) { const k = t.dataset.chart; if (t.checked) { if (S.chartKeys.length >= MAX_CHART) { t.checked = false; return toast(`Chart is limited to ${MAX_CHART} lines.`, true); } S.chartKeys.push(k); } else S.chartKeys = S.chartKeys.filter(x => x !== k); save(); buildChart(); }
+  else if (t.id === 'quickPreset') { if (t.value) applyPreset(t.value, true); t.value = ''; }
+  else if (t.id === 'selMake') changeProfile(t.value);
+  else if (t.id === 'selEngine') changeProfile(undefined, t.value);
+  else if (t.id === 'selTrans') changeProfile(undefined, undefined, t.value);
+  else if (t.id === 'setUnits') { S.units = t.value; save(); updateCards(); buildChart(); renderGrid(); }
+  else if (t.id === 'setPoll') { S.pollMs = Math.max(0, Math.min(5000, +t.value || 0)); save(); }
+  else if (t.id === 'setShowAll') { S.showAll = t.checked; save(); renderVariables(); }
+  else if (t.id === 'varGroup' || t.id === 'varSupOnly') renderVariables();
+  else if (t.id === 'cfgFile' && t.files[0]) { t.files[0].text().then(importCfg); t.value = ''; }
+});
+$('varSearch').addEventListener('input', renderVariables);
+$('rawCmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') rawCommand(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('drawer').classList.remove('open'); $('scrim').classList.remove('open'); } });
 
-        let step = 0;
-        simInterval = setInterval(() => {
-            step++;
-            const make = document.getElementById('vehicleMake').value;
-            
-            // Generate realistic driving data fluctuations
-            const rpm = Math.floor(1200 + Math.sin(step / 5) * 800 + Math.random() * 150);
-            const load = +(25 + Math.cos(step / 6) * 18 + Math.random() * 3).toFixed(1);
-            let transTemp = make === 'NISSAN' ? (175 + Math.sin(step / 30) * 12).toFixed(1) : (182 + Math.sin(step / 30) * 8).toFixed(1);
-            let secondaryVal = make === 'TOYOTA' ? (12 + Math.sin(step / 4) * 6).toFixed(1) : (0.8 + Math.sin(step / 4) * 0.3).toFixed(2);
-            
-            let gearText = "Gear: 3rd (Lockup)";
-            if(make === 'NISSAN') gearText = "CVT Ratio: 1.52 (Steady)";
-            else if(step % 20 < 10) gearText = "Gear: 4th (Overdrive)";
-
-            // Update UI elements
-            document.getElementById('valRpm').innerText = rpm;
-            document.getElementById('valLoad').innerText = load;
-            document.getElementById('valTransTemp').innerText = transTemp;
-            document.getElementById('valSecondary').innerText = secondaryVal;
-            document.getElementById('subGear').innerText = gearText;
-
-            // Push to charts
-            const timeLabel = new Date().toLocaleTimeString();
-            if(engineChart.data.labels.length > 30) {
-                engineChart.data.labels.shift();
-                engineChart.data.datasets[0].data.shift();
-                engineChart.data.datasets[1].data.shift();
-                transChart.data.labels.shift();
-                transChart.data.datasets[0].data.shift();
-            }
-            engineChart.data.labels.push(timeLabel);
-            engineChart.data.datasets[0].data.push(rpm);
-            engineChart.data.datasets[1].data.push(load);
-            engineChart.update('none');
-
-            transChart.data.labels.push(timeLabel);
-            transChart.data.datasets[0].data.push(transTemp);
-            transChart.update('none');
-
-            // Record data point for CSV log
-            telemetryHistory.push({
-                timestamp: new Date().toISOString(),
-                make: make,
-                rpm: rpm,
-                engineLoad: load,
-                transTemp: transTemp,
-                secondaryMetric: secondaryVal
-            });
-
-        }, 1000);
-    }
-
-    function scanDTCs() {
-        log("Scanning ECU & Transmission modules for DTCs...");
-        const tbody = document.getElementById('dtcTableBody');
-        tbody.innerHTML = '';
-        
-        activeDTCs.forEach(item => {
-            tbody.innerHTML += `<tr><td><strong style="color:var(--accent-red);">${item.code}</strong></td><td>${item.module}</td><td>${item.desc}</td></tr>`;
-        });
-        log(`Scan complete. Found ${activeDTCs.length} active/pending code(s).`);
-    }
-
-    function exportCSV() {
-        if(telemetryHistory.length === 0) {
-            alert("No telemetry data recorded yet. Run simulation or connect to record a log.");
-            return;
-        }
-
-        let csv = "Timestamp,Make,RPM,EngineLoad_Pct,TransTemp_F,SecondaryMetric\n";
-        telemetryHistory.forEach(row => {
-            csv += `${row.timestamp},${row.make},${row.rpm},${row.engineLoad},${row.transTemp},${row.secondaryMetric}\n`;
-        });
-
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `obdlink_${document.getElementById('vehicleMake').value.toLowerCase()}_diag_${new Date().toISOString().slice(0,10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        log("CSV diagnostic file exported successfully.");
-    }
-
-    function copyAISummary() {
-        const make = document.getElementById('vehicleMake').value;
-        const summary = `### AI Diagnostic Request (${make} Profile)\n` +
-            `- Active DTCs: ${activeDTCs.map(d => d.code + ' (' + d.desc + ')').join(', ')}\n` +
-            `- Recorded Data Points: ${telemetryHistory.length} frames\n` +
-            `- Average RPM: ${Math.round(telemetryHistory.reduce((acc, curr) => acc + curr.rpm, 0) / (telemetryHistory.length || 1))}\n` +
-            `- Max Fluid Temp: ${Math.max(...telemetryHistory.map(d => parseFloat(d.transTemp) || 0), 0)} °F\n\n` +
-            `Please analyze these parameters for potential sensor faults or mechanical wear.`;
-
-        navigator.clipboard.writeText(summary).then(() => {
-            alert("AI diagnostic prompt and summary copied to clipboard! Paste it directly into your AI chat for instant troubleshooting.");
-            log("AI summary copied to clipboard.");
-        });
-    }
+/* ───────────── start ───────────── */
+load(); rebuildDefs();
+$('varGroup').innerHTML = '<option value="">All groups</option>' + Object.values(G).map(g => `<option>${g}</option>`).join('');
+renderPresets(); renderCustom(); fillCustomForm({}); renderBadge(); renderVehicle();
+{ const saved = S.layouts[profKey()]; if (saved) S.slots = saved.filter(k => getDef(k)); else applyPreset('health', true); }
+if (!S.chartKeys.length) S.chartKeys = S.slots.filter(k => !getDef(k).derived).slice(0, 2);
+renderGrid(); buildChart(); setUI();
+log('BayScope ready. Pick a vehicle profile, then Connect adapter — or Start Sim to try the interface with fake data.');
+{ const h = (location.hash || '').slice(1); showView(/^[a-z]+$/.test(h) && document.getElementById('view-' + h) ? h : 'dashboard'); }
+window.BayScope = { S, compileExpr, toMessages, decodeDtcs, STD, DERIVED, PRESETS, getDef, fmt, applyPreset, addSlot, removeSlot, setValue };
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+})();
 </script>
 </body>
 </html>

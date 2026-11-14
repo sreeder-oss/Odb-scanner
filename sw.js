@@ -1,6 +1,6 @@
 // Network-first so updates you push show up immediately;
 // falls back to cache so the shell still opens with no signal (e.g. in a garage).
-const CACHE = 'obd-scanner-v1';
+const CACHE = 'bayscope-v1';
 const ASSETS = [
   './',
   './index.html',

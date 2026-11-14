@@ -1,7 +1,7 @@
 {
-  "name": "OBD Scanner",
-  "short_name": "OBD Scanner",
-  "description": "OBDLink MX+ diagnostic dashboard for Toyota and Nissan",
+  "name": "BayScope",
+  "short_name": "BayScope",
+  "description": "OBD-II dashboard for Toyota, Nissan and generic vehicles",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
