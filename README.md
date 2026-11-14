@@ -26,16 +26,25 @@ you're diagnosing, and log the session.
   evaluator (no `eval`).
 - **Trouble codes** — stored (03), pending (07), permanent (0A). Read-only; it
   never clears codes.
+- **Pre-purchase test drive** preset — RPM, speed, load, coolant, fuel trims,
+  voltage and RPM÷speed ratio, for evaluating a used car on a drive.
+- **Vehicle info on connect** — reads the VIN (Mode 09), decodes make and likely
+  model year, then reads check-engine light, readiness monitors, distance and
+  warm-ups since codes were cleared, and all three trouble-code lists. Flags
+  signs codes were recently cleared. Toyota/Nissan VINs switch the profile for
+  you; engine and transmission are still picked by hand.
 - **Terminal** with a raw command box for exploring your car.
-- CSV export (units in headers, simulated rows flagged), "copy AI prompt", and
+- CSV export with a `#`-commented vehicle header (VIN, codes, readiness, reset
+  history), an elapsed-seconds column, units in headers and simulated rows
+  flagged; a "copy AI prompt" tuned for buy / negotiate / walk-away advice; and
   settings backup/restore.
 - Simulation mode for trying the UI with no car. Its data is always labelled
   as fake.
 
 ## Read this before using it in a car
 
-The standard-PID polling, supported-PID scan, and trouble-code reader are
-implemented, but were written and tested against a **simulated adapter**, not
+The standard-PID polling, supported-PID scan, VIN/readiness read, and
+trouble-code reader are implemented, but were written and tested against a **simulated adapter**, not
 physical hardware. Try it parked, and compare against a tool you trust.
 
 - Manufacturer-specific PID definitions (ATF/CVT temperature, pulley pressures,

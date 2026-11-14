@@ -169,6 +169,8 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
     <label>Transmission<select id="selTrans"></select></label>
   </div>
   <div class="panel" id="profileSummary"></div>
+  <div class="panel" id="carInfo"></div>
+  <div class="note info">The VIN identifies the make and a likely model year. Engine and transmission can't be decoded reliably from a VIN, so pick them above.</div>
   <div class="note info">Your dashboard layout is remembered separately for each manufacturer / engine / transmission combination.</div>
 </section>
 
@@ -176,7 +178,8 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 <section class="view" id="view-codes">
   <h2>Trouble codes</h2>
   <div class="toolbar">
-    <button class="primary" data-act="scan" data-mode="03">Stored (Mode 03)</button>
+    <button class="primary" data-act="scan" data-mode="all">Scan all</button>
+    <button data-act="scan" data-mode="03">Stored (Mode 03)</button>
     <button data-act="scan" data-mode="07">Pending (Mode 07)</button>
     <button data-act="scan" data-mode="0A">Permanent (Mode 0A)</button>
     <span class="muted" id="dtcSource"></span>
@@ -234,8 +237,8 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
     <h3>Recorded session</h3>
     <p class="muted" id="histInfo"></p>
     <div class="toolbar">
-      <button class="primary" data-act="csv">Download CSV</button>
-      <button data-act="ai">Copy AI prompt</button>
+      <button class="primary" data-act="csv">Download CSV (with vehicle header)</button>
+      <button data-act="ai">Copy AI prompt (attach the CSV too)</button>
       <button data-act="clearSession">Clear session data</button>
     </div>
   </div>
@@ -270,7 +273,7 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 <section class="view" id="view-about">
   <h2>About BayScope</h2>
   <p>A single-page OBD-II dashboard for Toyota, Nissan, and generic vehicles. It talks to a Bluetooth LE ELM327-compatible adapter through Web Bluetooth, so it needs Chrome or Edge (desktop) or Chrome on Android, over HTTPS.</p>
-  <div class="note"><b>Read this before trusting it in a car.</b> The standard-PID read path, the supported-PID scan, and the code reader are implemented but were written without access to a physical adapter. Try it on a parked car first and compare against a known-good tool. Anything marked <i>est.</i> or <i>unverified</i> is an estimate or unconfirmed on real vehicles.</div>
+  <div class="note"><b>Read this before trusting it in a car.</b> The standard-PID read path, the supported-PID scan, the VIN / readiness read, and the code reader are implemented but were written without access to a physical adapter. Try it on a parked car first and compare against a known-good tool. Anything marked <i>est.</i> or <i>unverified</i> is an estimate or unconfirmed on real vehicles.</div>
   <p class="muted">Simulation mode generates plausible data with no car attached — everything it shows is fake, and exports from it are labelled as such.</p>
 </section>
 </main>
@@ -439,6 +442,8 @@ const MAKES = {
 
 /* ───────────── scan-target presets ───────────── */
 const PRESETS = [
+  { id: 'buy', name: 'Pre-purchase test drive', why: 'For evaluating a used car: RPM, speed, load, coolant, fuel trims (both banks on a V6/V8), battery voltage and the RPM÷speed ratio (slip / CVT behaviour). Drive a mix of idle, city and highway, then export from Data & export.',
+    keys: ['010C', '010D', '0104', '0105', '0106', '0107', '0108', '0109', '0142', 'D:RATIO', '0111', '013E'] },
   { id: 'health', name: 'General health check', why: 'A broad first look: speed, load, temps, voltage, and both fuel trims.',
     keys: ['010C', '0104', '0105', '010D', '0142', '010F', '0111', '0106', '0107', '010B'] },
   { id: 'fuel', name: 'Lean / rich — fuel trim hunt', why: 'Trims, airflow, and the O2/λ readings. Large positive trims = lean (vacuum leak, weak fuel); negative = rich.',
@@ -477,7 +482,7 @@ const S = {
   units: 'imperial', pollMs: 0, showAll: false,
   layouts: {}, chartKeys: [], custom: [],
   slots: [], mode: 'idle', supported: null,
-  values: {}, stats: {}, history: [], dtcs: [], dtcSource: '',
+  values: {}, stats: {}, history: [], dtcs: [], dtcSource: '', info: null,
 };
 const STORE = 'bayscope.v1';
 function save() {
@@ -688,10 +693,10 @@ function simTick() {
   for (const k of pollKeys()) { const d = getDef(k); if (d && !d.derived) setValue(k, simVal(d, simT)); }
   finishCycle();
 }
-function newSession() { S.history = []; S.stats = {}; S.values = {}; S.dtcs = []; S.dtcSource = ''; S.supported = null; cycleTimes = []; $('rateInfo').textContent = ''; renderDtc(); }
+function newSession() { S.history = []; S.stats = {}; S.values = {}; S.dtcs = []; S.dtcSource = ''; S.supported = null; S.info = null; cycleTimes = []; $('rateInfo').textContent = ''; renderDtc(); renderCarInfo(); }
 function startSim() {
   if (S.mode === 'live') { toast('Disconnect the adapter first.', true); return; }
-  newSession(); S.mode = 'sim'; simT = 0;
+  newSession(); S.mode = 'sim'; simT = 0; S.info = simInfo(); renderCarInfo();
   simTimer = setInterval(simTick, 500);
   $('simBtn').textContent = 'Stop Sim'; $('simBtn').classList.add('active');
   log('Simulation started — all values are FAKE.'); setUI();
@@ -798,7 +803,11 @@ async function connectLive() {
     const t = await sendCmd('0100', 15000); const r = toMessages(t);
     if (r.err || !r.msgs.some(x => x.startsWith('4100'))) throw new Error('The car did not answer (' + (r.err || 'no reply') + '). Is the ignition on and the adapter fully seated?');
     try { log('Protocol: ' + (await sendCmd('ATDP')).join(' ')); log('Adapter voltage: ' + (await sendCmd('ATRV')).join(' ')); } catch (e) {}
-    toast('Connected.'); readSupported().catch(() => {});
+    toast('Connected. Reading vehicle info…');
+    try { await readSupported(); } catch (e) { log('Supported-PID read failed: ' + e.message, 'err'); }
+    try { await readVehicleInfo(); } catch (e) { log('Vehicle info read failed: ' + e.message, 'err'); }
+    if (S.mode !== 'live') return;
+    toast('Ready — recording.');
     pollLoop();
   } catch (e) {
     if (e && e.name === 'NotFoundError') log('Pairing cancelled.'); else { log('Connection failed: ' + (e.message || e), 'err'); toast('Connection failed: ' + (e.message || e), true); }
@@ -836,6 +845,120 @@ async function rawCommand() {
   try { await sendCmd(v, 6000); } catch (e) { log('Command failed: ' + e.message, 'err'); }
 }
 
+/* ───────────── vehicle info: VIN, readiness, reset history ───────────── */
+const VIN_MAKERS = { '5N1': 'Nissan', '5NP': 'Hyundai', '3TM': 'Toyota', '3TY': 'Toyota', 'SJN': 'Nissan', 'SB1': 'Toyota', 'MR0': 'Toyota', 'VNK': 'Toyota', 'VSK': 'Nissan', '1HG': 'Honda', '2HG': 'Honda', '5J6': 'Honda', '5FN': 'Honda', '4S3': 'Subaru', '4S4': 'Subaru',
+  'JT': 'Toyota', '4T': 'Toyota', '5T': 'Toyota', '2T': 'Toyota', 'JN': 'Nissan', '1N': 'Nissan', '3N': 'Nissan', 'JH': 'Honda', 'JM': 'Mazda', 'JF': 'Subaru', '1F': 'Ford', '2F': 'Ford', '3F': 'Ford', '1G': 'GM', '2G': 'GM', '3G': 'GM', '1C': 'Chrysler/Dodge/Ram', '2C': 'Chrysler/Dodge/Ram', '3C': 'Chrysler/Dodge/Ram', '1J': 'Jeep', 'KM': 'Hyundai', 'KN': 'Kia', 'WV': 'Volkswagen', 'WB': 'BMW', 'WD': 'Mercedes-Benz' };
+const VIN_REGION = { '1': 'United States', '2': 'Canada', '3': 'Mexico', '4': 'United States', '5': 'United States', 'J': 'Japan', 'K': 'South Korea', 'L': 'China', 'S': 'United Kingdom', 'V': 'France/Spain', 'W': 'Germany', 'Z': 'Italy' };
+const VIN_YEARS = 'ABCDEFGHJKLMNPRSTVWXY123456789';
+function vinCheckOk(v) {
+  const W = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2], T = { A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8, J: 1, K: 2, L: 3, M: 4, N: 5, P: 7, R: 9, S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9 };
+  let sum = 0; for (let i = 0; i < 17; i++) sum += (/\d/.test(v[i]) ? +v[i] : T[v[i]]) * W[i];
+  const r = sum % 11; return (r === 10 ? 'X' : String(r)) === v[8];
+}
+function decodeVin(vin) {
+  const v = String(vin).toUpperCase();
+  const maker = VIN_MAKERS[v.slice(0, 3)] || VIN_MAKERS[v.slice(0, 2)] || null;
+  const yi = VIN_YEARS.indexOf(v[9]); let year = null, yearSure = false;
+  if (yi >= 0) {
+    const lo = 1980 + yi, hi = 2010 + yi, cur = new Date().getFullYear() + 1;
+    if ('12345'.includes(v[0])) { year = /[A-Z]/.test(v[6]) ? hi : lo; yearSure = true; }   // North American rule: letter in position 7 → 2010+
+    else year = hi <= cur ? hi : lo;
+  }
+  const region = VIN_REGION[v[0]] || null, check = vinCheckOk(v);
+  const summary = [maker || 'maker not in BayScope\'s short list', year ? `model year ${yearSure ? '' : '~'}${year}` : null, region ? `built in/for ${region}` : null,
+    check ? 'check digit valid' : 'check digit does not match (normal for some non-North-American VINs — otherwise recheck the VIN on the car)'].filter(Boolean).join(', ');
+  return { vin: v, maker, year, yearSure, region, check, summary };
+}
+function vinFromMsgs(msgs) {
+  const bytes = [];
+  for (const m of msgs) { if (m.startsWith('4902')) bytes.push(...bytesOf(m.slice(4)).slice(1)); }   // drop the count/sequence byte
+  const str = bytes.filter(c => c >= 0x30 && c < 0x7f).map(c => String.fromCharCode(c)).join('');
+  const hit = str.match(/[A-HJ-NPR-Z0-9]{17}/); return hit ? hit[0] : null;
+}
+function decodeReadiness(b) {   // SAE J1979 Mode 01 PID 01: 4 bytes
+  const [A, B, C, D] = b, monitors = [], compression = !!(B & 0x08);
+  [['Misfire', 0], ['Fuel system', 1], ['Components', 2]].forEach(([n, bit]) => { if (B & (1 << bit)) monitors.push({ name: n, ready: !(B & (1 << (bit + 4))) }); });
+  const NAMES = compression ? ['NMHC catalyst', 'NOx/SCR aftertreatment', null, 'Boost pressure', null, 'Exhaust gas sensor', 'PM filter', 'EGR/VVT']
+                            : ['Catalyst', 'Heated catalyst', 'EVAP system', 'Secondary air', 'A/C refrigerant', 'O2 sensor', 'O2 sensor heater', 'EGR/VVT'];
+  NAMES.forEach((n, bit) => { if (n && (C & (1 << bit))) monitors.push({ name: n, ready: !(D & (1 << bit)) }); });
+  return { mil: !!(A & 0x80), dtcCount: A & 0x7f, monitors, compression };
+}
+async function readPidBytes(pid, n) {
+  await setHdr('7DF'); const r = toMessages(await sendCmd('01' + pid, 4000)); if (r.err) return null;
+  const m = r.msgs.find(x => x.startsWith('41' + pid)); if (!m) return null;
+  const b = bytesOf(m.slice(4)); return b.length >= n ? b : null;
+}
+async function readVin() {
+  await setHdr('7DF'); const r = toMessages(await sendCmd('0902', 9000)); if (r.err) return null; return vinFromMsgs(r.msgs);
+}
+function simInfo() {
+  return { sim: true, vin: null, vinInfo: null, mil: false, dtcCount: 0, distClr: 85, warmups: 3, distMil: 0, read: new Date().toISOString(),
+    monitors: [{ name: 'Misfire', ready: true }, { name: 'Fuel system', ready: true }, { name: 'Components', ready: true }, { name: 'Catalyst', ready: false }, { name: 'EVAP system', ready: false }, { name: 'O2 sensor', ready: true }] };
+}
+async function readVehicleInfo() {
+  const I = { sim: false, vin: null, vinInfo: null, mil: null, dtcCount: null, monitors: null, distClr: null, warmups: null, distMil: null, read: new Date().toISOString() };
+  const g = async (fn) => { if (S.mode !== 'live') return null; try { return await fn(); } catch (e) { return null; } };
+  const sup = (pid) => !S.supported || S.supported.has('01' + pid);
+  log('Reading VIN, readiness and reset history…');
+  I.vin = await g(readVin);
+  if (S.mode !== 'live') return;
+  if (I.vin) {
+    I.vinInfo = decodeVin(I.vin); log('VIN: ' + I.vin + ' — ' + I.vinInfo.summary);
+    const want = I.vinInfo.maker === 'Toyota' ? 'TOYOTA' : I.vinInfo.maker === 'Nissan' ? 'NISSAN' : I.vinInfo.maker ? 'GENERIC' : null;
+    if (want && want !== S.make) {                      // switch profile but keep the dashboard the user already set up
+      const keep = S.slots.slice(); changeProfile(want);
+      S.slots = keep.filter(k => getDef(k)); commitLayout();
+      toast(`VIN says ${I.vinInfo.maker} — profile switched to ${MAKES[want].name}. Pick the engine/transmission, then re-load a scan target.`);
+    }
+  } else log('No VIN from this car (many pre-2005 cars do not answer, or the reply was not in a format BayScope understands).');
+  const r01 = await g(() => readPidBytes('01', 4));
+  if (r01) { const d = decodeReadiness(r01); I.mil = d.mil; I.dtcCount = d.dtcCount; I.monitors = d.monitors; }
+  if (sup('31')) { const b = await g(() => readPidBytes('31', 2)); if (b) I.distClr = b[0] * 256 + b[1]; }
+  if (sup('30')) { const b = await g(() => readPidBytes('30', 1)); if (b) I.warmups = b[0]; }
+  if (sup('21')) { const b = await g(() => readPidBytes('21', 2)); if (b) I.distMil = b[0] * 256 + b[1]; }
+  S.info = I; renderCarInfo();
+  log(`Readiness: MIL ${I.mil === null ? '?' : I.mil ? 'ON' : 'off'}, ${I.monitors ? I.monitors.filter(m => !m.ready).length + ' monitor(s) not ready' : 'monitors unknown'}, ${I.distClr === null ? '?' : I.distClr + ' km'} since codes cleared.`);
+  if (S.mode === 'live') await scanDtc(null, true);
+}
+function carFlags(I) {
+  const f = [], nr = (I.monitors || []).filter(m => !m.ready).map(m => m.name);
+  if (I.mil) f.push('The check-engine light (MIL) is on.');
+  if (I.distMil > 0) f.push(`The car has been driven ${I.distMil} km with the MIL on.`);
+  const recent = (I.distClr !== null && I.distClr < 160) || (I.warmups !== null && I.warmups <= 5);
+  if (recent) f.push(`Codes / ECU memory appear to have been reset recently (${[I.distClr !== null ? I.distClr + ' km' : null, I.warmups !== null ? I.warmups + ' warm-up cycles' : null].filter(Boolean).join(' and ')} since). That is normal after a repair or battery disconnect, but it is also a way to hide a fault — ask the seller why.`);
+  if (nr.length >= 2) f.push(`${nr.length} readiness monitors are not ready (${nr.join(', ')}). A shop can't emissions-test it yet, and it often follows a code clear.`);
+  return f;
+}
+function describeInfo() {
+  const I = S.info, m = MAKES[S.make], out = [];
+  out.push(`Vehicle profile in app: ${m.name}, ${curEngine().name}, ${m.trans[S.trans]} (engine and transmission are chosen by the user, not read from the car)`);
+  if (!I) out.push('VIN, readiness and reset history: not read');
+  else {
+    if (I.sim) out.push('WARNING: the vehicle info below is SIMULATED');
+    out.push(`VIN: ${I.vin ? I.vin + (I.vinInfo ? ' — ' + I.vinInfo.summary : '') : 'not available from this car'}`);
+    out.push(I.mil === null ? 'Check-engine light / ECU code count: not read' : `Check-engine light (MIL): ${I.mil ? 'ON' : 'off'}; ECU reports ${I.dtcCount} confirmed code(s)`);
+    if (I.monitors) { const nr = I.monitors.filter(x => !x.ready).map(x => x.name), rd = I.monitors.filter(x => x.ready).map(x => x.name); out.push(`Readiness monitors ready: ${rd.join(', ') || 'none'}; NOT ready: ${nr.join(', ') || 'none'}`); }
+    if (I.distClr !== null) out.push(`Distance since codes cleared: ${I.distClr} km (${Math.round(I.distClr * 0.621371)} mi)`);
+    if (I.warmups !== null) out.push(`Warm-up cycles since codes cleared: ${I.warmups}`);
+    if (I.distMil !== null) out.push(`Distance driven with MIL on: ${I.distMil} km`);
+  }
+  out.push('Trouble codes: ' + (S.dtcSource ? (S.dtcs.length ? S.dtcs.map(d => `${d.code} ${d.kind.toLowerCase()} (${DTC[d.code] || 'not in built-in list'})`).join('; ') : 'none reported') + ' — ' + S.dtcSource : 'not read this session'));
+  if (I) carFlags(I).forEach(x => out.push('NOTE: ' + x));
+  return out;
+}
+function renderCarInfo() {
+  const el = $('carInfo'); if (!el) return; const I = S.info;
+  if (!I) { el.innerHTML = '<h3 style="margin-top:0">Vehicle info (read from the car)</h3><p class="muted">Not read yet. When you connect an adapter, BayScope reads the VIN, check-engine and readiness status, and how long it has been since codes were cleared, then lists them here and in your export.</p>'; return; }
+  const rows = [['VIN', I.vin ? `<b>${esc(I.vin)}</b><div class="muted">${esc(I.vinInfo ? I.vinInfo.summary : '')}</div>` : '<span class="muted">not available from this car</span>'],
+    ['Check-engine light', I.mil === null ? '<span class="muted">not read</span>' : I.mil ? '<span style="color:var(--red)"><b>ON</b></span>' + ` · ECU reports ${I.dtcCount} code(s)` : 'off'],
+    ['Since codes cleared', I.distClr === null ? '<span class="muted">not reported</span>' : `${I.distClr} km (${Math.round(I.distClr * 0.621371)} mi)${I.warmups !== null ? ` · ${I.warmups} warm-up cycles` : ''}`],
+    ['Driven with MIL on', I.distMil === null ? '<span class="muted">not reported</span>' : `${I.distMil} km`]];
+  let h = `<h3 style="margin-top:0">Vehicle info (read from the car${I.sim ? ' — SIMULATED' : ''})</h3><table><tbody>` + rows.map(r => `<tr><th style="width:11rem">${r[0]}</th><td>${r[1]}</td></tr>`).join('') + '</tbody></table>';
+  if (I.monitors) h += '<h3>Readiness monitors</h3>' + I.monitors.map(m => `<span class="tag ${m.ready ? 'ok' : 'warn'}" style="margin:2px 6px 2px 0">${esc(m.name)}: ${m.ready ? 'ready' : 'not ready'}</span>`).join('');
+  h += carFlags(I).map(x => `<div class="note">${esc(x)}</div>`).join('');
+  el.innerHTML = h;
+}
+
 /* ───────────── trouble codes ───────────── */
 function decodeDtcs(msgs, resp) {
   const out = [];
@@ -849,24 +972,34 @@ function decodeDtcs(msgs, resp) {
   return [...new Set(out)];
 }
 const DTC_KIND = { '03': 'Stored', '07': 'Pending', '0A': 'Permanent' };
-async function scanDtc(mode) {
+async function readDtcMode(mode) {
+  await setHdr('7DF'); const r = toMessages(await sendCmd(mode, 8000));
+  const resp = (parseInt(mode, 16) + 0x40).toString(16).toUpperCase().padStart(2, '0');
+  if (r.err && !/NO DATA/i.test(r.err)) throw new Error(r.err);
+  return r.err ? [] : decodeDtcs(r.msgs, resp);
+}
+async function scanDtc(mode, all) {
+  const modes = all ? ['03', '07', '0A'] : [mode];
   if (S.mode === 'sim') {
-    S.dtcs = [{ code: 'P0420', kind: DTC_KIND[mode] }]; S.dtcSource = 'SIMULATED — not from a car'; renderDtc(); return;
+    S.dtcs = (all ? [] : S.dtcs.filter(x => x.kind !== DTC_KIND[mode])).concat([{ code: 'P0420', kind: DTC_KIND[modes[0]] }]); S.dtcSource = 'SIMULATED — not from a car'; renderDtc(); return;
   }
   if (S.mode !== 'live') { toast('Connect an adapter to read codes.', true); return; }
-  try {
-    await setHdr('7DF'); const r = toMessages(await sendCmd(mode, 8000));
-    const resp = (parseInt(mode, 16) + 0x40).toString(16).toUpperCase().padStart(2, '0');
-    if (r.err && !/NO DATA/i.test(r.err)) throw new Error(r.err);
-    const codes = r.err ? [] : decodeDtcs(r.msgs, resp);
-    S.dtcs = codes.map(c => ({ code: c, kind: DTC_KIND[mode] })); S.dtcSource = `read from car at ${new Date().toLocaleTimeString()}`;
-    log(`${DTC_KIND[mode]} codes: ${codes.join(', ') || 'none'}`); renderDtc();
-  } catch (e) { toast('Could not read codes: ' + e.message, true); log('DTC read failed: ' + e.message, 'err'); }
+  const out = [], fails = [];
+  for (const m of modes) {
+    if (S.mode !== 'live') return;
+    try { const codes = await readDtcMode(m); out.push(...codes.map(c => ({ code: c, kind: DTC_KIND[m] }))); log(`${DTC_KIND[m]} codes: ${codes.join(', ') || 'none'}`); }
+    catch (e) { fails.push(`${DTC_KIND[m]}: ${e.message}`); log(`${DTC_KIND[m]} code read failed: ${e.message}`, 'err'); }
+  }
+  if (fails.length === modes.length) { toast('Could not read codes: ' + fails[0], true); return; }
+  const done = modes.filter(m => !fails.some(f => f.startsWith(DTC_KIND[m])));
+  S.dtcs = (all ? [] : S.dtcs.filter(x => x.kind !== DTC_KIND[mode])).concat(out);
+  S.dtcSource = `read from car at ${new Date().toLocaleTimeString()}` + (all ? '' : ` (${DTC_KIND[mode].toLowerCase()} only)`) + (fails.length ? ` — could not read: ${fails.join('; ')}` : '');
+  renderDtc();
 }
 function renderDtc() {
   $('dtcSource').textContent = S.dtcSource;
   $('dtcBody').innerHTML = S.dtcs.length ? S.dtcs.map(x => `<tr><td><b style="color:var(--red)">${esc(x.code)}</b></td><td>${esc(x.kind)}</td><td>${esc(DTC[x.code] || 'Not in the built-in list — search the code for your model.')}</td></tr>`).join('')
-    : '<tr><td colspan="3" class="muted" style="text-align:center">No codes reported.</td></tr>';
+    : `<tr><td colspan="3" class="muted" style="text-align:center">${S.dtcSource ? 'No codes reported.' : 'Nothing scanned yet. Connect an adapter, then scan.'}</td></tr>`;
 }
 
 /* ───────────── pickers & views ───────────── */
@@ -954,7 +1087,7 @@ function showView(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + v));
   document.querySelectorAll('#drawer [data-view]').forEach(b => b.classList.toggle('cur', b.dataset.view === v));
   $('drawer').classList.remove('open'); $('scrim').classList.remove('open');
-  if (v === 'variables') renderVariables(); if (v === 'codes') renderDtc(); if (v === 'data') renderHistInfo();
+  if (v === 'variables') renderVariables(); if (v === 'codes') renderDtc(); if (v === 'vehicle') renderCarInfo(); if (v === 'data') renderHistInfo();
   if (v === 'settings') { $('setUnits').value = S.units; $('setPoll').value = S.pollMs; $('setShowAll').checked = S.showAll; }
   if (v === 'dashboard' && chart) chart.resize();
   try { history.replaceState(null, '', '#' + v); } catch (e) {}
@@ -970,22 +1103,37 @@ function renderHistInfo() {
   $('histInfo').textContent = S.history.length ? `${S.history.length} samples recorded this session${sim ? ' (includes SIMULATED data)' : ''}.` : 'Nothing recorded yet — samples are logged while the simulator or an adapter is running.';
 }
 function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
-function exportCSV() {
-  if (!S.history.length) return toast('No data recorded yet.', true);
+function buildCsv() {
+  if (!S.history.length) return null;
   const keys = [...new Set(S.history.flatMap(r => Object.keys(r.vals)))];
-  const head = ['timestamp', 'simulated', ...keys.map(k => { const d = getDef(k); return d ? `${d.name} (${disp(d, d.min).unit})` : k; })];
-  const q = (s) => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  const rows = S.history.map(r => [r.ts, r.sim ? 'yes' : 'no', ...keys.map(k => { const d = getDef(k); return (r.vals[k] === undefined || !d) ? '' : fmt(d, r.vals[k]).text; })].map(q).join(','));
-  download(`bayscope_${S.make.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`, [head.map(q).join(','), ...rows].join('\n'), 'text/csv;charset=utf-8');
-  log('CSV exported.');
+  const t0 = Date.parse(S.history[0].ts), dur = (Date.parse(S.history[S.history.length - 1].ts) - t0) / 1000;
+  const meta = ['BayScope OBD-II session export', ...(S.history.some(r => r.sim) ? ['WARNING: contains SIMULATED rows (see the simulated column)'] : []), ...describeInfo(),
+    `Samples: ${S.history.length} over ${dur.toFixed(0)} s${dur > 0 ? ` (~${(S.history.length / dur).toFixed(1)} per second)` : ''}`,
+    `Values use ${S.units} units; units are in the column headers. Empty cell = car did not answer for that variable.`,
+    'Lines starting with # are notes — skip them when parsing (e.g. pandas read_csv comment="#").'];
+  const head = ['timestamp', 'elapsed_s', 'simulated', ...keys.map(k => { const d = getDef(k); return d ? `${d.name} (${disp(d, d.min).unit})` : k; })];
+  const q = (x) => /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x;
+  const rows = S.history.map(r => [r.ts, ((Date.parse(r.ts) - t0) / 1000).toFixed(1), r.sim ? 'yes' : 'no', ...keys.map(k => { const d = getDef(k); return (r.vals[k] === undefined || !d) ? '' : fmt(d, r.vals[k]).text; })].map(q).join(','));
+  return [...meta.map(l => '# ' + l), head.map(q).join(','), ...rows].join('\n');
+}
+function exportCSV() {
+  const text = buildCsv(); if (!text) return toast('No data recorded yet.', true);
+  const tag = S.info && S.info.vin ? S.info.vin : S.make.toLowerCase();
+  download(`bayscope_${tag}_${new Date().toISOString().slice(0, 10)}.csv`, text, 'text/csv;charset=utf-8'); log('CSV exported.');
 }
 function aiPrompt() {
-  const sim = S.history.some(r => r.sim); const m = MAKES[S.make];
-  let t = `### Vehicle diagnostic summary\n- Vehicle: ${m.name}, engine ${curEngine().name}, transmission ${m.trans[S.trans]}\n`;
+  const sim = S.history.some(r => r.sim), dur = S.history.length > 1 ? (Date.parse(S.history[S.history.length - 1].ts) - Date.parse(S.history[0].ts)) / 1000 : 0;
+  let t = '### Used-vehicle test-drive data (OBD-II, from BayScope)\n';
   if (sim) t += '- WARNING: this session includes SIMULATED data, not a real vehicle.\n';
-  t += `- Trouble codes: ${S.dtcs.length ? S.dtcs.map(d => `${d.code} (${DTC[d.code] || d.kind})`).join(', ') + ' — ' + S.dtcSource : 'none read this session'}\n- Samples: ${S.history.length}\n- Variable statistics (min / avg / max):\n`;
+  describeInfo().forEach(l => t += '- ' + l + '\n');
+  t += `- Samples: ${S.history.length}${dur ? ` over ${dur.toFixed(0)} s` : ''}\n- Variable statistics (min / avg / max):\n`;
   for (const [k, st] of Object.entries(S.stats)) { const d = getDef(k); if (!d || !st.n) continue; const a = fmt(d, st.min), b = fmt(d, st.sum / st.n), c = fmt(d, st.max); t += `  - ${d.name}: ${a.text} / ${b.text} / ${c.text} ${a.unit}\n`; }
-  t += '\nPlease interpret these readings, point out anything that looks abnormal for this engine and transmission, and suggest the next diagnostic steps.';
+  t += "\nI'm deciding whether to buy this vehicle and how to negotiate. The attached CSV is the time-series from the test drive (lines starting with # are notes). Please:\n"
+    + '1. Flag readings that look abnormal for this engine and transmission — fuel trims, coolant warm-up and thermostat behaviour, idle/misfire stability, voltage, and RPM÷speed changes that suggest slip.\n'
+    + '2. Say what the trouble-code, readiness and "since codes cleared" data suggest, including whether codes may have been cleared recently.\n'
+    + '3. Give an overall risk assessment, and list specific things to inspect, ask the seller, or have a shop check.\n'
+    + '4. Suggest negotiation points that follow from the data, and say which findings should make me walk away.\n'
+    + 'Be explicit about uncertainty: OBD data cannot confirm mechanical condition, a short test drive can miss intermittent faults, and some values are estimates.';
   return t;
 }
 async function copyAI() {
@@ -1020,7 +1168,7 @@ document.addEventListener('click', (e) => {
     case 'connect': S.mode === 'live' ? (log('Disconnected.'), teardown()) : connectLive(); break;
     case 'sim': S.mode === 'sim' ? stopSim() : startSim(); break;
     case 'readSupported': readSupported().catch(err => toast('Read failed: ' + err.message, true)); break;
-    case 'scan': scanDtc(D.mode); break;
+    case 'scan': D.mode === 'all' ? scanDtc(null, true) : scanDtc(D.mode); break;
     case 'saveCustom': saveCustom(); break;
     case 'clearCustomForm': editingId = null; fillCustomForm({}); break;
     case 'rawSend': rawCommand(); break;
@@ -1054,13 +1202,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('drawe
 /* ───────────── start ───────────── */
 load(); rebuildDefs();
 $('varGroup').innerHTML = '<option value="">All groups</option>' + Object.values(G).map(g => `<option>${g}</option>`).join('');
-renderPresets(); renderCustom(); fillCustomForm({}); renderBadge(); renderVehicle();
+renderPresets(); renderCustom(); fillCustomForm({}); renderBadge(); renderVehicle(); renderCarInfo();
 { const saved = S.layouts[profKey()]; if (saved) S.slots = saved.filter(k => getDef(k)); else applyPreset('health', true); }
 if (!S.chartKeys.length) S.chartKeys = S.slots.filter(k => !getDef(k).derived).slice(0, 2);
 renderGrid(); buildChart(); setUI();
 log('BayScope ready. Pick a vehicle profile, then Connect adapter — or Start Sim to try the interface with fake data.');
 { const h = (location.hash || '').slice(1); showView(/^[a-z]+$/.test(h) && document.getElementById('view-' + h) ? h : 'dashboard'); }
-window.BayScope = { S, compileExpr, toMessages, decodeDtcs, STD, DERIVED, PRESETS, getDef, fmt, applyPreset, addSlot, removeSlot, setValue };
+window.BayScope = { S, compileExpr, toMessages, decodeDtcs, decodeVin, vinFromMsgs, decodeReadiness, describeInfo, buildCsv, aiPrompt, STD, DERIVED, PRESETS, getDef, fmt, applyPreset, addSlot, removeSlot, setValue };
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 })();
 </script>
