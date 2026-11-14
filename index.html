@@ -34,6 +34,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #menuBtn{font-size:1.2rem;padding:2px 11px}
 .status-pill{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red)}
 .status-pill.sim{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.linkstat{margin:.2rem 0 .7rem;padding:.55rem .8rem;border-radius:8px;border:1px solid var(--line,#30363d);background:#161b22;font-size:.9rem}.linkstat.ok{border-color:#2ea043;color:#7ee787}.linkstat.warn{border-color:#d29922;color:#e3b341}.linkstat.err{border-color:#f85149;color:#ff7b72}.linkstat[hidden]{display:none}
 .status-pill.live{background:var(--green);box-shadow:0 0 8px var(--green)}
 
 /* drawer */
@@ -103,8 +104,8 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
     <span class="badge" id="profileBadge"></span>
   </div>
   <div class="controls-bar">
-    <button class="primary" id="btConnectBtn" data-act="connect" title="Bluetooth Low Energy adapters">Connect (Bluetooth LE)</button>
-    <button id="serConnectBtn" data-act="connectSerial" title="Cheap Bluetooth Classic ELM327 clones (paired in your device settings) and USB cables">Connect (Classic / USB)</button>
+    <button class="primary" id="btConnectBtn" data-act="connect" title="Bluetooth Low Energy adapters">Connect: BLE adapter</button>
+    <button id="serConnectBtn" data-act="connectSerial" title="Cheap Bluetooth Classic ELM327 clones (paired in your device settings) and USB cables">Connect: Classic Bluetooth / USB</button>
     <button id="simBtn" data-act="sim">Start Sim</button>
   </div>
 </header>
@@ -113,14 +114,14 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 <nav id="drawer" aria-label="Main menu">
   <div class="dh">BayScope</div>
   <button data-view="dashboard">Dashboard</button>
-  <button data-view="variables">Variables</button>
-  <button data-view="targets">Scan targets</button>
-  <button data-view="vehicle">Vehicle profile</button>
-  <button data-view="codes">Trouble codes</button>
+  <button data-view="variables">Choose gauges</button>
+  <button data-view="targets">What are you checking?</button>
+  <button data-view="vehicle">My car</button>
+  <button data-view="codes">Check-engine codes</button>
   <hr>
-  <button data-view="custom">Custom PIDs</button>
-  <button data-view="terminal">Terminal log</button>
-  <button data-view="data">Data &amp; export</button>
+  <button data-view="custom" id="menuCustom">Custom variables (advanced)</button>
+  <button data-view="terminal">Connection log</button>
+  <button data-view="data">Save &amp; share data</button>
   <button data-view="settings">Settings</button>
   <button data-view="about">About</button>
 </nav>
@@ -129,11 +130,26 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 <!-- DASHBOARD -->
 <section class="view" id="view-dashboard">
   <div class="toolbar">
-    <button class="primary" data-view="variables">+ Add variable</button>
-    <select id="quickPreset" title="Load a scan target"></select>
+    <button class="primary" data-view="variables">+ Add gauge</button>
+    <select id="quickPreset" title="Pick what you are checking and the right gauges load"></select>
     <span class="muted" id="slotCount"></span>
     <span class="muted" id="rateInfo"></span>
     <input id="evtLabel" placeholder="What just happened? (stumble, noise…)" style="width:230px" autocomplete="off"><button data-act="mark" title="Drops a marker into the recording at this moment">Mark moment</button>
+  </div>
+  <div class="linkstat" id="linkStatus" hidden></div>
+  <div class="panel" id="startHelp">
+    <h3 style="margin-top:0">Start here</h3>
+    <ol style="margin:.2rem 0 .5rem 1.2rem;padding:0;line-height:1.6">
+      <li>Plug the adapter into the car’s OBD port (under the dash) and turn the key to <b>ON</b>. Engine running is best.</li>
+      <li>Press the connect button that matches your adapter:
+        <ul style="margin:.2rem 0 .2rem 1rem">
+          <li><b>Classic Bluetooth / USB</b> — if you had to <i>pair</i> it in your phone or computer’s Bluetooth settings first (most cheap ones).</li>
+          <li><b>BLE adapter</b> — if an app found it on its own without pairing.</li>
+        </ul>
+      </li>
+      <li>Watch the status line. In under a minute you should see numbers on the gauges and the car’s VIN.</li>
+    </ol>
+    <div class="muted">No car handy? Press <b>Start Sim</b> to see how it looks with fake numbers. Wi-Fi adapters don’t work with a web page.</div>
   </div>
   <div class="dashboard-grid" id="grid"></div>
   <div class="chart-box">
@@ -144,7 +160,7 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 
 <!-- VARIABLES -->
 <section class="view" id="view-variables">
-  <h2>Variables</h2>
+  <h2>Choose gauges</h2>
   <p class="muted" id="varIntro"></p>
   <div class="filters">
     <input type="search" id="varSearch" placeholder="Search variables…">
@@ -157,14 +173,14 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 
 <!-- SCAN TARGETS -->
 <section class="view" id="view-targets">
-  <h2>Scan targets</h2>
+  <h2>What are you checking?</h2>
   <p class="muted">Pick what you're hunting and BayScope fills the dashboard with the variables that matter for it (up to 10). It adapts to your engine, transmission, and—once connected—to what your car actually reports. Fewer variables also means a faster refresh rate.</p>
   <div id="presetList" class="panel"></div>
 </section>
 
 <!-- VEHICLE -->
 <section class="view" id="view-vehicle">
-  <h2>Vehicle profile</h2>
+  <h2>My car</h2>
   <div class="form-grid">
     <label>Manufacturer<select id="selMake"></select></label>
     <label>Engine<select id="selEngine"></select></label>
@@ -184,7 +200,7 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 
 <!-- CODES -->
 <section class="view" id="view-codes">
-  <h2>Trouble codes</h2>
+  <h2>Check-engine codes</h2>
   <div class="toolbar">
     <button class="primary" data-act="scan" data-mode="all">Scan all</button>
     <button data-act="scan" data-mode="03">Stored (Mode 03)</button>
@@ -229,18 +245,19 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
 
 <!-- TERMINAL -->
 <section class="view" id="view-terminal">
-  <h2>Terminal log</h2>
+  <h2>Connection log</h2>
   <div class="log-terminal" id="terminalLog"></div>
   <div class="toolbar" style="margin-top:.6rem">
     <input id="rawCmd" placeholder="Raw adapter command, e.g. ATRV or 0105" style="flex:1;min-width:200px" autocomplete="off" autocapitalize="characters">
     <button data-act="rawSend">Send</button>
+    <button data-act="copyReport" class="primary">Copy report</button>
     <button data-act="clearLog">Clear log</button>
   </div>
 </section>
 
 <!-- DATA -->
 <section class="view" id="view-data">
-  <h2>Data &amp; export</h2>
+  <h2>Save &amp; share data</h2>
   <div class="panel">
     <h3>Recorded session</h3>
     <p class="muted" id="histInfo"></p>
@@ -269,6 +286,7 @@ li{line-height:1.5;font-size:.9rem;margin-left:1.2rem}
       <label>Units<select id="setUnits"><option value="imperial">Imperial (°F, mph, psi)</option><option value="metric">Metric (°C, km/h, kPa)</option></select></label>
       <label>Pause between read cycles (ms)<input id="setPoll" type="number" min="0" max="5000" step="50"></label>
     </div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:.88rem;margin-bottom:.6rem"><input type="checkbox" id="setTech"> Show technical details (PID codes, custom variables) — for people who already know what these are</label>
     <label style="display:flex;gap:6px;align-items:center;font-size:.88rem;margin-bottom:.8rem"><input type="checkbox" id="setShowAll"> Show every variable, even ones that don't suit the selected engine (e.g. bank 2 on a 4-cylinder)</label>
     <div class="toolbar">
       <button data-act="resetLayout">Reset this vehicle's dashboard</button>
@@ -487,19 +505,19 @@ const DTC = {
 /* ───────────── state & persistence ───────────── */
 const S = {
   make: 'TOYOTA', engine: '2GR-FE', trans: 'AT',
-  units: 'imperial', pollMs: 0, showAll: false,
+  units: 'imperial', pollMs: 0, showAll: false, tech: false,
   layouts: {}, chartKeys: [], custom: [],
   slots: [], mode: 'idle', supported: null,
   values: {}, stats: {}, history: [], dtcs: [], dtcSource: '', info: null, purpose: 'own', notes: '', garage: [], events: [], pendingEv: [],
 };
 const STORE = 'bayscope.v1';
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ make: S.make, engine: S.engine, trans: S.trans, units: S.units, pollMs: S.pollMs, showAll: S.showAll, layouts: S.layouts, chartKeys: S.chartKeys, custom: S.custom, purpose: S.purpose, notes: S.notes, garage: S.garage })); } catch (e) {}
+  try { localStorage.setItem(STORE, JSON.stringify({ make: S.make, engine: S.engine, trans: S.trans, units: S.units, pollMs: S.pollMs, showAll: S.showAll, tech: S.tech, layouts: S.layouts, chartKeys: S.chartKeys, custom: S.custom, purpose: S.purpose, notes: S.notes, garage: S.garage })); } catch (e) {}
 }
 function load() {
   try {
     const o = JSON.parse(localStorage.getItem(STORE) || 'null'); if (!o) return;
-    for (const k of ['make', 'engine', 'trans', 'units', 'pollMs', 'showAll', 'layouts', 'chartKeys', 'custom', 'purpose', 'notes', 'garage']) if (o[k] !== undefined) S[k] = o[k];
+    for (const k of ['make', 'engine', 'trans', 'units', 'pollMs', 'showAll', 'tech', 'layouts', 'chartKeys', 'custom', 'purpose', 'notes', 'garage']) if (o[k] !== undefined) S[k] = o[k];
   } catch (e) {}
   if (!MAKES[S.make]) S.make = 'TOYOTA';
   if (!MAKES[S.make].engines[S.engine]) S.engine = Object.keys(MAKES[S.make].engines)[0];
@@ -600,18 +618,18 @@ function renderBadge() {
 }
 function renderGrid() {
   const g = $('grid'); g.innerHTML = '';
-  if (!S.slots.length) { g.innerHTML = '<div class="empty">Nothing on the dashboard yet. Use <b>+ Add variable</b>, or load a preset from the dropdown.</div>'; }
+  if (!S.slots.length) { g.innerHTML = '<div class="empty">Nothing on the dashboard yet. Use <b>+ Add gauge</b>, or pick what you are checking from the dropdown.</div>'; }
   for (const k of S.slots) {
     const d = getDef(k); if (!d) continue;
     const c = document.createElement('div'); c.className = 'card'; c.id = 'card_' + sid(k);
-    const sub = d.derived ? 'estimated' : d.custom ? `custom · ${esc(d.cfg.req)}` : `PID ${d.key}`;
+    const sub = d.derived ? 'estimated' : d.custom ? `custom · ${esc(d.cfg.req)}` : S.tech ? `PID ${d.key}` : '';
     c.innerHTML = `<div class="card-title"><span title="${esc(d.name)}">${esc(d.short)}</span><span class="card-tools"><label title="Plot on chart"><input type="checkbox" data-chart="${esc(k)}" ${S.chartKeys.includes(k) ? 'checked' : ''}>chart</label><button class="x" data-remove="${esc(k)}" title="Remove from dashboard">×</button></span></div>
       <div><span class="metric-value" id="${sid(k)}_v">--</span><span class="metric-unit" id="${sid(k)}_u">${esc(disp(d, d.min).unit)}</span></div>
       <div class="bar"><i id="${sid(k)}_b"></i></div>
       <div class="metric-sub" id="${sid(k)}_s">${sub}</div>`;
     g.appendChild(c);
   }
-  $('slotCount').textContent = `${S.slots.length} / ${MAX_SLOTS} variables`;
+  $('slotCount').textContent = `${S.slots.length} / ${MAX_SLOTS} gauges`;
   updateCards();
 }
 function updateCards() {
@@ -631,9 +649,9 @@ function updateCards() {
       if (S.mode === 'live' && sup === false) $(sid(k) + '_s').textContent = 'not reported by this car';
     }
   }
-  const mode = S.mode === 'sim' ? 'sim' : S.mode === 'live' ? 'live' : '';
+  const mode = S.mode === 'sim' ? 'sim' : S.mode === 'live' ? (L.ready ? 'live' : 'sim') : '';
   $('connectionStatus').className = 'status-pill ' + mode;
-  $('connectionStatus').title = S.mode === 'sim' ? 'Simulation (fake data)' : S.mode === 'live' ? 'Connected' : 'Not connected';
+  $('connectionStatus').title = S.mode === 'sim' ? 'Simulation (fake data)' : S.mode === 'live' ? (L.ready ? 'Connected to the car' : 'Connecting…') : 'Not connected';
 }
 
 /* ───────────── chart ───────────── */
@@ -664,6 +682,7 @@ function pushChart() {
 /* ───────────── recording ───────────── */
 let cycleTimes = [];
 function finishCycle() {
+  if (S.mode === 'live' && L.ready && Object.keys(S.values).length && !L.flowing) { L.flowing = true; clearTimeout(L.watch); setLink('✓ Live data is flowing.', 'ok'); setTimeout(() => { if (S.mode === 'live') setLink('', ''); }, 6000); }
   computeDerived(); updateCards(); pushChart();
   const row = { ts: new Date().toISOString(), sim: S.mode === 'sim', vals: {} };
   let n = 0; for (const k of S.slots) { const x = S.values[k]; if (x) { row.vals[k] = x.v; n++; } }
@@ -704,24 +723,24 @@ function simTick() {
 }
 function newSession() { S.history = []; S.stats = {}; S.values = {}; S.dtcs = []; S.dtcSource = ''; S.supported = null; S.info = null; S.events = []; S.pendingEv = []; cycleTimes = []; $('rateInfo').textContent = ''; renderDtc(); renderCarInfo(); }
 function startSim() {
-  if (S.mode === 'live') { toast('Disconnect the adapter first.', true); return; }
+  if (S.mode === 'live') { log('Disconnecting the adapter to start the simulator.'); teardown(); }
   newSession(); S.mode = 'sim'; simT = 0; S.info = simInfo(); renderCarInfo();
   simTimer = setInterval(simTick, 500);
   $('simBtn').textContent = 'Stop Sim'; $('simBtn').classList.add('active');
-  log('Simulation started — all values are FAKE.'); setUI();
+  log('Simulation started — all values are FAKE.'); setLink('Simulator is on — every number you see is fake, no car involved.', 'warn'); setUI();
 }
 function stopSim() {
   clearInterval(simTimer); simTimer = null; S.mode = 'idle';
   $('simBtn').textContent = 'Start Sim'; $('simBtn').classList.remove('active');
-  log('Simulation stopped.'); setUI();
+  log('Simulation stopped.'); setLink('', ''); setUI();
 }
 
 /* ───────────── adapter link (Web Bluetooth + ELM327 command set) ───────────── */
 const BLE_SERVICES = [0xFFE0, 0xFFF0, 0x18F0, 0xAE00, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000fff0-0000-1000-8000-00805f9b34fb'];
-const L = { kind: null, dev: null, tx: null, rx: null, port: null, reader: null, writer: null, buf: '', pending: null, q: Promise.resolve(), hdr: '7DF', run: false, nd: {}, cycle: 0, timeouts: 0 };
+const L = { ready: false, session: 0, lastRx: 0, bus: Promise.resolve(), watch: null, kind: null, dev: null, tx: null, rx: null, port: null, reader: null, writer: null, buf: '', pending: null, q: Promise.resolve(), hdr: '7DF', run: false, nd: {}, cycle: 0, timeouts: 0 };
 const enc = new TextEncoder(), dec = new TextDecoder();
 function feed(text) {
-  L.buf += text; const i = L.buf.indexOf('>');
+  L.lastRx = Date.now(); L.buf += text; const i = L.buf.indexOf('>');
   if (i >= 0 && L.pending) { const raw = L.buf.slice(0, i); L.buf = L.buf.slice(i + 1); const p = L.pending; L.pending = null; clearTimeout(p.timer); p.resolve(raw); }
 }
 function onRx(e) { feed(dec.decode(e.target.value)); }
@@ -740,7 +759,17 @@ function rawSend(cmd, timeout) {
     })();
   });
 }
-function sendCmd(cmd, timeout = 3000) { const p = L.q.then(() => rawSend(cmd, timeout)); L.q = p.catch(() => {}); return p.then(r => { const t = r.replace(/\r/g, '\n').split('\n').map(s => s.trim()).filter(Boolean); log('← ' + t.join(' | ')); return t; }); }
+/* A clone that answers late would otherwise have its late reply read as the answer to the NEXT command, and every
+   reading after that is shifted by one. After a timeout, wait until the adapter has gone quiet before moving on. */
+async function resync() { const t0 = Date.now(); await sleep(400); while (Date.now() - L.lastRx < 600 && Date.now() - t0 < 5000) await sleep(100); L.buf = ''; }
+function sendCmd(cmd, timeout = 3000) {
+  const p = L.q.then(async () => { try { return await rawSend(cmd, timeout); } catch (e) { if (e && e.message === 'timeout' && L.kind) await resync(); throw e; } });
+  L.q = p.catch(() => {});
+  return p.then(r => { const t = r.replace(/\r/g, '\n').split('\n').map(s => s.trim()).filter(Boolean); log('← ' + t.join(' | ')); return t; });
+}
+/* Several commands that must stay together (set header, then ask) run through one lock, so the background
+   vehicle-info read and the live polling can share the adapter without tripping over each other. */
+const bus = (fn) => { const p = L.bus.then(fn); L.bus = p.catch(() => {}); return p; };
 async function setHdr(h) { if (L.hdr !== h) { await sendCmd('ATSH' + h); L.hdr = h; } }
 const ERR_RE = /(NO DATA|UNABLE TO CONNECT|CAN ERROR|BUS BUSY|BUS ERROR|STOPPED|BUFFER FULL|DATA ERROR|FB ERROR|LV RESET|^\?$)/i;
 /* Turn adapter text lines into a list of hex messages (handles multi-frame "0:/1:" output). */
@@ -758,7 +787,8 @@ function toMessages(lines) {
   return { err: null, msgs };
 }
 const bytesOf = (hex) => hex.match(/.{2}/g)?.map(h => parseInt(h, 16)) || [];
-async function queryStd(d) {
+const queryStd = (d) => bus(() => _queryStd(d));
+async function _queryStd(d) {
   await setHdr('7DF');
   const r = toMessages(await sendCmd(d.key));
   if (r.err) return { err: r.err };
@@ -766,7 +796,8 @@ async function queryStd(d) {
   const b = bytesOf(m.slice(pre.length)); if (b.length < d.n) return { err: 'short reply' };
   return { v: d.fn(...b) };
 }
-async function queryCustom(d) {
+const queryCustom = (d) => bus(() => _queryCustom(d));
+async function _queryCustom(d) {
   const c = d.cfg; await setHdr((c.header || '7DF').toUpperCase());
   const r = toMessages(await sendCmd(c.req.toUpperCase(), 3500));
   if (r.err) return { err: r.err };
@@ -777,10 +808,10 @@ async function queryCustom(d) {
 }
 async function readSupported() {
   if (S.mode !== 'live') { toast('Connect an adapter first.', true); return; }
-  const sup = new Set(); log('Reading the list of PIDs your car supports…');
+  const sup = new Set(); log('Reading which variables your car supports…');
   for (let base = 0; base <= 0xA0; base += 0x20) {
-    const bs = base.toString(16).toUpperCase().padStart(2, '0'); await setHdr('7DF');
-    const r = toMessages(await sendCmd('01' + bs, 5000)); if (r.err) break;
+    const bs = base.toString(16).toUpperCase().padStart(2, '0');
+    const r = toMessages(await bus(async () => { await setHdr('7DF'); return sendCmd('01' + bs, 5000); })); if (r.err) break;
     const m = r.msgs.find(x => x.startsWith('41' + bs)); if (!m) break;
     const b = bytesOf(m.slice(4)); if (b.length < 4) break;
     for (let i = 0; i < 32; i++) if (b[i >> 3] & (0x80 >> (i & 7))) sup.add('01' + (base + i + 1).toString(16).toUpperCase().padStart(2, '0'));
@@ -793,7 +824,7 @@ async function openBle() {
   if (!navigator.bluetooth) throw new Error('Web Bluetooth is not available here. Use Chrome or Edge (desktop) or Chrome on Android — or try the "Classic / USB" button for a cheap clone.');
   log('Choose your adapter in the pairing prompt…');
   const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
-  L.dev = dev; dev.addEventListener('gattserverdisconnected', () => { if (S.mode === 'live' && L.dev === dev) { log('Adapter dropped the connection.', 'err'); teardown(); } });
+  L.dev = dev; dev.addEventListener('gattserverdisconnected', () => { if (S.mode === 'live' && L.dev === dev) { log('Adapter dropped the connection.', 'err'); setLink('The adapter dropped the connection. Press Connect to try again.', 'err'); teardown(true); } });
   log(`Connecting to ${dev.name || 'adapter'}…`);
   const server = await dev.gatt.connect();
   const services = await server.getPrimaryServices(); let pick = null, fb = { rx: null, tx: null };
@@ -809,7 +840,7 @@ function startSerialIO(port) {
   L.reader = port.readable.getReader(); L.writer = port.writable.getWriter(); const reader = L.reader;
   (async () => {
     try { for (;;) { const { value, done } = await reader.read(); if (done) break; if (value) feed(dec.decode(value)); } } catch (e) {}
-    if (S.mode === 'live' && L.port === port) { log('Adapter dropped the connection.', 'err'); teardown(); }
+    if (S.mode === 'live' && L.port === port) { log('Adapter dropped the connection.', 'err'); setLink('The adapter dropped the connection. Press Connect to try again.', 'err'); teardown(true); }
   })();
 }
 async function closeSerialIO(port) {
@@ -827,36 +858,63 @@ async function openSerial() {
   }
   L.port = null; throw new Error('The adapter did not answer. Is it plugged into the car, and (for Bluetooth) paired in your device settings?');
 }
+/* Plain-English status line on the dashboard: where the connection is, and what to try if it stalls. */
+function setLink(text, kind) {
+  const el = $('linkStatus'); if (!el) return;
+  el.hidden = !text; el.textContent = text || ''; el.className = 'linkstat ' + (kind || '');
+}
+function explainCarError(last) {
+  if (/UNABLE TO CONNECT|NO DATA|no reply/i.test(last)) return 'The adapter is working, but the car did not answer. Turn the key to ON (engine running is best), push the adapter in firmly, and try again.';
+  if (/CAN ERROR|BUS|FB ERROR/i.test(last)) return 'The adapter and the car could not agree on a connection (' + last + '). Turn the car off and on, then try again.';
+  return 'The car did not answer (' + last + '). Is the ignition on and the adapter pushed in all the way?';
+}
 async function connectLive(kind) {
   if (S.mode === 'sim') stopSim();
-  L.q = Promise.resolve(); L.buf = ''; L.pending = null;
+  L.flowing = false; const my = ++L.session; L.q = Promise.resolve(); L.bus = Promise.resolve(); L.buf = ''; L.pending = null; L.ready = false;
+  const gone = () => my !== L.session;
   try {
+    setLink(kind === 'serial' ? 'Step 1 of 3 — pick your adapter in the pop-up (it must already be paired in your device’s Bluetooth settings).' : 'Step 1 of 3 — pick your adapter in the pop-up.', '');
     if (kind === 'serial') await openSerial(); else await openBle();
+    if (gone()) return;
     L.hdr = '7DF'; L.nd = {}; L.cycle = 0; L.timeouts = 0; L.q = Promise.resolve();
     newSession(); S.mode = 'live'; setUI();
+    setLink('Step 2 of 3 — talking to the adapter…', '');
     for (const c of ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0']) await sendCmd(c, c === 'ATZ' ? 6000 : 3000);
     try { log('Adapter: ' + (await sendCmd('ATI')).join(' ')); } catch (e) {}
+    setLink('Step 3 of 3 — looking for your car. The key must be ON. This can take 10–30 seconds.', '');
     log('Looking for the car\'s protocol (can take several seconds; ignition must be ON)…');
     let ok = false, last = 'no reply';
+    const ask = async () => { const r = toMessages(await sendCmd('0100', 15000)); ok = !r.err && r.msgs.some(x => x.startsWith('4100')); last = r.err || 'no reply'; };
     for (let attempt = 0; attempt < 2 && !ok; attempt++) {      // cheap clones often miss the first search
       if (attempt) { log('No answer yet — trying once more…'); await sleep(1500); }
-      const r = toMessages(await sendCmd('0100', 15000)); ok = !r.err && r.msgs.some(x => x.startsWith('4100')); last = r.err || 'no reply';
+      await ask();
     }
-    if (!ok) throw new Error('The car did not answer (' + last + '). Is the ignition on and the adapter fully seated?');
+    for (const sp of ['6', '3', '5']) {                         // automatic search failed: try the common protocols by hand (6 = CAN, 3/5 = older Toyota/Nissan)
+      if (ok || gone()) break;
+      log('Automatic search failed — trying protocol ' + sp + '…'); setLink('Still looking for your car (trying another connection type)…', '');
+      try { await sendCmd('ATSP' + sp, 3000); await ask(); } catch (e) { if (gone()) return; }
+    }
+    if (gone()) return;
+    if (!ok) throw new Error(explainCarError(last));
     try { log('Protocol: ' + (await sendCmd('ATDP')).join(' ')); log('Adapter voltage: ' + (await sendCmd('ATRV')).join(' ')); } catch (e) {}
-    toast('Connected. Reading vehicle info…');
-    try { await readSupported(); } catch (e) { log('Supported-PID read failed: ' + e.message, 'err'); }
-    try { await readVehicleInfo(); } catch (e) { log('Vehicle info read failed: ' + e.message, 'err'); }
-    if (S.mode !== 'live') return;
-    toast('Ready — recording.');
-    pollLoop();
+    L.ready = true; setUI();
+    setLink('✓ Connected to the car. Live numbers should start appearing now…', 'ok'); toast('Connected to the car.');
+    L.watch = setTimeout(() => { if (L.ready && S.mode === 'live' && !Object.keys(S.values).length) setLink('Connected, but the car has not sent any numbers yet. Check the key is ON. If this stays blank, open Menu → Connection log → “Copy report” and send it to me.', 'warn'); }, 20000);
+    pollLoop();                                                  // live values first…
+    (async () => {                                               // …while the VIN, readiness and codes are read in the background
+      try { await readSupported(); } catch (e) { log('Supported-variable read failed: ' + e.message, 'err'); }
+      try { await readVehicleInfo(); } catch (e) { log('Vehicle info read failed: ' + e.message, 'err'); }
+    })();
   } catch (e) {
-    if (e && e.name === 'NotFoundError') log('Pairing cancelled.'); else { log('Connection failed: ' + (e.message || e), 'err'); toast('Connection failed: ' + (e.message || e), true); }
-    teardown();
+    if (gone()) { log('Connection cancelled.'); return; }
+    if (e && e.name === 'NotFoundError') { log('Pairing cancelled.'); setLink('', ''); }
+    else { log('Connection failed: ' + (e.message || e), 'err'); toast('Connection failed: ' + (e.message || e), true); setLink('Could not connect: ' + (e.message || e), 'err'); }
+    teardown(true);
   }
 }
-function teardown() {
-  L.run = false; try { if (L.rx) L.rx.removeEventListener('characteristicvaluechanged', onRx); } catch (e) {}
+function teardown(keepMsg) {
+  L.session++; L.ready = false; clearTimeout(L.watch); L.run = false; if (!keepMsg) setLink('', '');
+  try { if (L.rx) L.rx.removeEventListener('characteristicvaluechanged', onRx); } catch (e) {}
   try { if (L.dev && L.dev.gatt.connected) L.dev.gatt.disconnect(); } catch (e) {}
   const port = L.port; L.port = null; if (port) closeSerialIO(port);
   L.dev = L.rx = L.tx = null; L.kind = null; if (S.mode === 'live') S.mode = 'idle'; setUI();
@@ -875,7 +933,7 @@ async function pollLoop() {
         else { L.nd[k] = 0; setValue(k, r.v); }
       } catch (e) {
         if (!L.run) break;
-        if (++L.timeouts > 4) { log('Adapter stopped responding — disconnecting.', 'err'); toast('Adapter stopped responding.', true); teardown(); return; }
+        if (++L.timeouts > 4) { log('Adapter stopped responding — disconnecting.', 'err'); toast('Adapter stopped responding.', true); setLink('The adapter stopped responding. Unplug it, plug it back in, and press Connect.', 'err'); teardown(true); return; }
       }
     }
     if (L.run) { finishCycle(); if (S.pollMs) await sleep(S.pollMs); }
@@ -884,7 +942,7 @@ async function pollLoop() {
 async function rawCommand() {
   const v = $('rawCmd').value.trim(); if (!v) return;
   if (S.mode !== 'live') { toast('Connect an adapter first.', true); return; }
-  try { await sendCmd(v, 6000); } catch (e) { log('Command failed: ' + e.message, 'err'); }
+  try { await bus(() => sendCmd(v, 6000)); } catch (e) { log('Command failed: ' + e.message, 'err'); }
 }
 
 /* ───────────── vehicle info: VIN, readiness, reset history ───────────── */
@@ -925,12 +983,14 @@ function decodeReadiness(b) {   // SAE J1979 Mode 01 PID 01: 4 bytes
   NAMES.forEach((n, bit) => { if (n && (C & (1 << bit))) monitors.push({ name: n, ready: !(D & (1 << bit)) }); });
   return { mil: !!(A & 0x80), dtcCount: A & 0x7f, monitors, compression };
 }
-async function readPidBytes(pid, n) {
+const readPidBytes = (pid, n) => bus(() => _readPidBytes(pid, n));
+async function _readPidBytes(pid, n) {
   await setHdr('7DF'); const r = toMessages(await sendCmd('01' + pid, 4000)); if (r.err) return null;
   const m = r.msgs.find(x => x.startsWith('41' + pid)); if (!m) return null;
   const b = bytesOf(m.slice(4)); return b.length >= n ? b : null;
 }
-async function readVin() {
+const readVin = () => bus(() => _readVin());
+async function _readVin() {
   await setHdr('7DF'); const r = toMessages(await sendCmd('0902', 9000)); if (r.err) return null; return vinFromMsgs(r.msgs);
 }
 function simInfo() {
@@ -952,7 +1012,7 @@ async function readVehicleInfo() {
     else if (want && want !== S.make) {                      // switch profile but keep the dashboard the user already set up
       const keep = S.slots.slice(); changeProfile(want);
       S.slots = keep.filter(k => getDef(k)); commitLayout();
-      toast(`VIN says ${I.vinInfo.maker} — profile switched to ${MAKES[want].name}. Pick the engine/transmission, then re-load a scan target.`);
+      toast(`VIN says ${I.vinInfo.maker} — profile switched to ${MAKES[want].name}. Pick the engine/transmission, then pick what you are checking again.`);
     }
   } else log('No VIN from this car (many pre-2005 cars do not answer, or the reply was not in a format BayScope understands).');
   const r01 = await g(() => readPidBytes('01', 4));
@@ -1021,7 +1081,8 @@ function decodeDtcs(msgs, resp) {
   return [...new Set(out)];
 }
 const DTC_KIND = { '03': 'Stored', '07': 'Pending', '0A': 'Permanent' };
-async function readDtcMode(mode) {
+const readDtcMode = (mode) => bus(() => _readDtcMode(mode));
+async function _readDtcMode(mode) {
   await setHdr('7DF'); const r = toMessages(await sendCmd(mode, 8000));
   const resp = (parseInt(mode, 16) + 0x40).toString(16).toUpperCase().padStart(2, '0');
   if (r.err && !/NO DATA/i.test(r.err)) throw new Error(r.err);
@@ -1075,7 +1136,7 @@ function renderVariables() {
   let html = '';
   for (const d of defs) {
     const on = S.slots.includes(d.key), sup = isSupported(d);
-    const tags = [`<span class="tag">${esc(d.group)}</span>`, d.custom ? '' : `<span class="tag">${d.derived ? 'calculated' : 'PID ' + d.pid}</span>`,
+    const tags = [`<span class="tag">${esc(d.group)}</span>`, d.custom ? '' : `<span class="tag">${d.derived ? 'calculated' : (S.tech ? 'PID ' + d.pid : '')}</span>`,
       sup === true ? '<span class="tag ok">your car ✓</span>' : sup === false ? '<span class="tag no">not reported</span>' : '',
       d.est ? '<span class="tag warn">est.</span>' : '', d.unv ? '<span class="tag warn">unverified</span>' : ''].join('');
     html += `<div class="picker-row"><div><div class="nm">${esc(d.name)} ${tags}</div>${d.note ? `<div class="muted">${esc(d.note)}</div>` : ''}</div>
@@ -1092,7 +1153,7 @@ function renderVariables() {
 }
 function renderPresets() {
   $('presetList').innerHTML = PRESETS.map(p => `<div class="preset"><div><b>${esc(p.name)}</b><div class="muted">${esc(p.why)}</div></div><button class="primary" data-preset="${p.id}">Load</button></div>`).join('');
-  $('quickPreset').innerHTML = '<option value="">Load a scan target…</option>' + PRESETS.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('quickPreset').innerHTML = '<option value="">What are you checking?…</option>' + PRESETS.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
 }
 function renderVehicle() {
   const mk = $('selMake'), en = $('selEngine'), tr = $('selTrans');
@@ -1158,12 +1219,13 @@ function showView(v) {
   document.querySelectorAll('#drawer [data-view]').forEach(b => b.classList.toggle('cur', b.dataset.view === v));
   $('drawer').classList.remove('open'); $('scrim').classList.remove('open');
   if (v === 'variables') renderVariables(); if (v === 'codes') renderDtc(); if (v === 'vehicle') { renderCarInfo(); renderGarage(); renderSession(); } if (v === 'data') renderHistInfo();
-  if (v === 'settings') { $('setUnits').value = S.units; $('setPoll').value = S.pollMs; $('setShowAll').checked = S.showAll; }
+  if (v === 'settings') { $('setTech').checked = S.tech; $('setUnits').value = S.units; $('setPoll').value = S.pollMs; $('setShowAll').checked = S.showAll; }
   if (v === 'dashboard' && chart) chart.resize();
   try { history.replaceState(null, '', '#' + v); } catch (e) {}
 }
 function setUI() {
-  const btn = $('btConnectBtn'); btn.textContent = S.mode === 'live' ? 'Disconnect' : 'Connect (Bluetooth LE)'; $('serConnectBtn').style.display = S.mode === 'live' ? 'none' : ''; btn.classList.toggle('active', S.mode === 'live');
+  const h = $('startHelp'); if (h) h.style.display = (S.mode === 'idle' && !S.history.length && !S.info) ? '' : 'none';
+  const btn = $('btConnectBtn'); btn.textContent = S.mode === 'live' ? (L.ready ? 'Disconnect' : 'Cancel') : 'Connect: BLE adapter'; $('serConnectBtn').style.display = S.mode === 'live' ? 'none' : ''; btn.classList.toggle('active', S.mode === 'live');
   $('readSupBtn').disabled = S.mode !== 'live'; updateCards(); renderVariables();
 }
 
@@ -1256,6 +1318,12 @@ document.addEventListener('click', (e) => {
     case 'saveCustom': saveCustom(); break;
     case 'clearCustomForm': editingId = null; fillCustomForm({}); break;
     case 'rawSend': rawCommand(); break;
+    case 'copyReport': {
+      const rep = ['BayScope connection report', new Date().toString(), navigator.userAgent, `Web Bluetooth: ${!!navigator.bluetooth}, Web Serial: ${!!navigator.serial}`,
+        `mode=${S.mode} link=${L.kind} ready=${L.ready} supported=${S.supported ? S.supported.size : 'unread'} values=${Object.keys(S.values).length} vin=${S.info && S.info.vin || 'none'}`, '', $('terminalLog').innerText].join('\n');
+      (navigator.clipboard ? navigator.clipboard.writeText(rep) : Promise.reject()).then(() => toast('Report copied — paste it into the chat.'), () => { const w = window.open('', '_blank'); if (w) { w.document.write('<pre>' + esc(rep) + '</pre>'); } else toast('Could not copy. Select the log text and copy it by hand.', true); });
+      break;
+    }
     case 'clearLog': $('terminalLog').innerHTML = ''; break;
     case 'csv': exportCSV(); break;
     case 'ai': copyAI(); break;
@@ -1276,6 +1344,7 @@ document.addEventListener('change', (e) => {
   else if (t.id === 'setPurpose') { S.purpose = t.value; save(); renderSession(); renderCarInfo(); }
   else if (t.id === 'setUnits') { S.units = t.value; save(); updateCards(); buildChart(); renderGrid(); }
   else if (t.id === 'setPoll') { S.pollMs = Math.max(0, Math.min(5000, +t.value || 0)); save(); }
+  else if (t.id === 'setTech') { S.tech = t.checked; save(); applyTech(); renderGrid(); renderVariables(); }
   else if (t.id === 'setShowAll') { S.showAll = t.checked; save(); renderVariables(); }
   else if (t.id === 'varGroup' || t.id === 'varSupOnly') renderVariables();
   else if (t.id === 'cfgFile' && t.files[0]) { t.files[0].text().then(importCfg); t.value = ''; }
@@ -1287,7 +1356,8 @@ $('rawCmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') rawComma
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('drawer').classList.remove('open'); $('scrim').classList.remove('open'); } });
 
 /* ───────────── start ───────────── */
-load(); rebuildDefs();
+function applyTech() { $('menuCustom').style.display = S.tech ? '' : 'none'; }
+load(); applyTech(); rebuildDefs();
 $('varGroup').innerHTML = '<option value="">All groups</option>' + Object.values(G).map(g => `<option>${g}</option>`).join('');
 renderPresets(); renderCustom(); fillCustomForm({}); renderBadge(); renderVehicle(); renderCarInfo(); renderGarage(); renderSession();
 { const saved = S.layouts[profKey()]; if (saved) S.slots = saved.filter(k => getDef(k)); else applyPreset('health', true); }
