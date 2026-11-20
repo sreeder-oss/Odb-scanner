@@ -1,42 +1,83 @@
-// Network-first so updates you push show up immediately;
-// falls back to cache so the shell still opens with no signal (e.g. in a garage).
-const CACHE = 'bayscope-v3';
-const ASSETS = [
+const CACHE_NAME = 'bayscope-shell-v18';
+
+const APP_SHELL_ASSETS = [
   './',
   './index.html',
+  './styles.css',
+  './app.js',
   './manifest.webmanifest',
+  './js/formula.js',
+  './js/obd-parser.js',
+  './js/pids.js',
+  './js/profiles.js',
+  './js/elm327.js',
+  './js/simulator.js',
+  './js/export.js',
+  './js/ai.js',
+  './js/guide.js',
+  './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  'https://cdn.jsdelivr.net/npm/chart.js'
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png',
 ];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) =>
-      Promise.all(ASSETS.map((u) => c.add(u).catch(() => {})))
-    )
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL_ASSETS))
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      )
     )
   );
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
-        return res;
-      })
-      .catch(() => caches.match(e.request))
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // Network-first for local app shell assets so updates apply immediately when online,
+  // with full offline fallback to the cached shell when in a garage/basement.
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // External CDN resources (Chart.js, Google Fonts)
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const fetchPromise = fetch(request)
+        .then((response) => {
+          if (response && (response.status === 200 || response.type === 'opaque')) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || fetchPromise;
+    })
   );
 });
