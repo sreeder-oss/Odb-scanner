@@ -2,7 +2,7 @@
 // Supports Anthropic (Claude), Google (Gemini), and OpenRouter (DeepSeek) direct from the browser via SSE streaming.
 // Never hardcodes or logs API keys.
 
-import { computeBaselineComparison } from './export.js';
+import { computeBaselineComparison, extractMarkedMomentWindows } from './export.js';
 
 export const AI_PROVIDERS = {
   anthropic: {
@@ -126,6 +126,8 @@ export function buildSessionContextObject({
   vehicleInfo,
   activeProfile = null,
   adapterInfo = null,
+  pidHealthTracker = null,
+  recordedPidIds = null,
   baseline = null,
   sessionPurpose,
   userNotes,
@@ -169,10 +171,26 @@ export function buildSessionContextObject({
     pidHex: s.pidHex,
     name: s.name,
     unit: s.unit,
+    start: s.first !== null && s.first !== undefined ? Number(s.first.toFixed(s.decimals)) : null,
+    end: s.last !== null && s.last !== undefined ? Number(s.last.toFixed(s.decimals)) : null,
     min: Number(s.min.toFixed(s.decimals)),
     avg: Number(s.avg.toFixed(s.decimals)),
     max: Number(s.max.toFixed(s.decimals)),
     samples: s.count,
+  }));
+
+  const pidsForWindows = Array.isArray(recordedPidIds) && recordedPidIds.length > 0
+    ? recordedPidIds
+    : dashboardPids;
+  const markedMomentWindows = extractMarkedMomentWindows(records, pidsForWindows, pidMap, {
+    windowBeforeSec: 8,
+    windowAfterSec: 8,
+    maxRowsPerWindow: 30,
+  }).map((w) => ({
+    marker: w.marker,
+    atSec: w.atSec,
+    window: w.window,
+    csv: w.csvBlock,
   }));
 
   const markedMoments = records
@@ -218,6 +236,9 @@ export function buildSessionContextObject({
       : null,
     cvtZeroDtcCaution: Boolean(activeProfile?.isCvtProfile && !hasAnyDtcs),
     adapterInfo: adapterInfo || null,
+    telemetryHealth: pidHealthTracker?.toSummaryString
+      ? pidHealthTracker.toSummaryString(pidMap)
+      : 'all active PIDs steady',
     vehicleProfile: {
       manufacturer: mfrName,
       engine: engineName,
@@ -256,6 +277,7 @@ export function buildSessionContextObject({
         }
       : null,
     markedMoments,
+    markedMomentWindows,
   };
 }
 
@@ -263,10 +285,12 @@ export function buildCompactStatsTable(stats) {
   if (!stats || stats.length === 0) {
     return 'Per-PID session summary: No telemetry samples recorded yet.';
   }
-  const lines = ['PID | Name | Unit | Min | Avg | Max | Samples'];
+  const lines = ['PID | Name | Unit | Start | End | Min | Avg | Max | Samples'];
   for (const s of stats) {
+    const startStr = s.first !== null && s.first !== undefined ? s.first.toFixed(s.decimals) : '—';
+    const endStr = s.last !== null && s.last !== undefined ? s.last.toFixed(s.decimals) : '—';
     lines.push(
-      `${s.pidHex} | ${s.name} | ${s.unit} | ${s.min.toFixed(s.decimals)} | ${s.avg.toFixed(s.decimals)} | ${s.max.toFixed(s.decimals)} | ${s.count}`
+      `${s.pidHex} | ${s.name} | ${s.unit} | ${startStr} | ${endStr} | ${s.min.toFixed(s.decimals)} | ${s.avg.toFixed(s.decimals)} | ${s.max.toFixed(s.decimals)} | ${s.count}`
     );
   }
   return lines.join('\n');

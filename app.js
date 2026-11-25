@@ -46,10 +46,12 @@ import {
 } from './js/elm327.js';
 import { SIM_SCENARIOS, VehicleSimulator } from './js/simulator.js';
 import {
+  buildAiDiagnosticPayload,
   buildAiPrompt,
   buildCsvContent,
   computeBaselineComparison,
   computeSessionStats,
+  createPidHealthTracker,
   downsampleRecordsForAi,
 } from './js/export.js';
 import {
@@ -141,6 +143,7 @@ const state = {
   pendingEvent: '',
   samplingRateHz: 0,
   isSimulatedSession: false,
+  pidHealthTracker: createPidHealthTracker(),
 
   logs: [], // { ts, dir, text }
   varFilterText: '',
@@ -634,6 +637,7 @@ function newSession() {
   state.pendingEvent = '';
   state.samplingRateHz = 0;
   state.driveScriptDone = new Set();
+  state.pidHealthTracker = createPidHealthTracker();
 }
 
 function applyCaptureModeLayout() {
@@ -1813,6 +1817,7 @@ function getExportPayload() {
     profileLabel,
     activeProfile: getActiveProfile(),
     adapterInfo: getAdapterInfoSnapshot(),
+    pidHealthTracker: state.pidHealthTracker,
     baseline,
     sessionPurpose: state.settings.sessionPurpose,
     userNotes: state.settings.userNotes,
@@ -1929,6 +1934,15 @@ function recordCycleSample(valuesObj, simulated) {
     values: { ...valuesObj },
     event: eventText,
   });
+
+  if (simulated && state.pidHealthTracker) {
+    const elapsedSec = state.records.length > 0 ? (Date.now() - state.records[0].ts) / 1000 : 0;
+    for (const [k, v] of Object.entries(valuesObj)) {
+      if (v !== null && Number.isFinite(v)) {
+        state.pidHealthTracker.record({ pid: k, status: 'ok', value: v, elapsedSec });
+      }
+    }
+  }
 
   if (state.activeView === 'dashboard') {
     renderDashboard();
@@ -2751,6 +2765,7 @@ async function runRealPollingLoop(elm) {
       // Resend same PID on PID-echo mismatch (desync) or single 200ms NO DATA retry
       for (let attempt = 0; attempt < 4; attempt++) {
         if (!state.pollActive || !elm.connected) break;
+        const elapsedSec = state.records.length > 0 ? (Date.now() - state.records[0].ts) / 1000 : 0;
 
         try {
           await elm.ensureHeader(targetHeader);
@@ -2765,10 +2780,12 @@ async function runRealPollingLoop(elm) {
               cycleValues[pidId] = val;
               pidNoDataStreak.set(pidId, 0);
             }
+            state.pidHealthTracker.record({ pid: pidId, status: 'ok', value: val, elapsedSec });
             break;
           }
 
           if (reply.status === 'desync') {
+            state.pidHealthTracker.record({ pid: pidId, status: 'desync', elapsedSec });
             // PID echo mismatch: flush CR x3 / drain, adapt rate (200ms -> 300ms), resend same PID, never count as failure
             desyncCount++;
             const newDelay = elm.slowDownPolling(desyncCount);
@@ -2806,6 +2823,7 @@ async function runRealPollingLoop(elm) {
             continue;
           }
 
+          state.pidHealthTracker.record({ pid: pidId, status: 'no_data', elapsedSec });
           const nextStreak = (pidNoDataStreak.get(pidId) || 0) + 1;
           pidNoDataStreak.set(pidId, nextStreak);
           if (nextStreak === 3) {
@@ -2832,6 +2850,7 @@ async function runRealPollingLoop(elm) {
           }
 
           // PROTOCOL error (timeout): auto-recover unless 6 full seconds of zero response after retries
+          state.pidHealthTracker.record({ pid: pidId, status: 'timeout', elapsedSec });
           if (zeroResponseSince === null) zeroResponseSince = Date.now();
           recoveryRetries++;
           appendLog({
@@ -3569,15 +3588,19 @@ function bindEvents() {
 
   $('ai-attach-summary-btn').addEventListener('click', () => {
     const payload = getExportPayload();
-    const stats = computeSessionStats(payload.records, payload.recordedPidIds, state.pidMap);
-    const table = buildCompactStatsTable(stats);
+    const diag = buildAiDiagnosticPayload({
+      records: payload.records,
+      recordedPidIds: payload.recordedPidIds,
+      pidMap: state.pidMap,
+      headerLines: [state.pidHealthTracker.toCsvHeaderLine(state.pidMap)],
+    });
     state.aiPendingAttachment = {
       type: 'summary',
-      label: `Full log summary attached (${stats.length} variables)`,
-      text: `\n\n[Attached Full Log Summary]\n${table}`,
+      label: `Full log summary + ${diag.eventWindows.length} event window(s) attached`,
+      text: `\n\n[Attached Diagnostic Summary & Event Windows]\n${diag.summaryText}`,
     };
     renderAiChatView();
-    showToast('Log summary attached to next message', 'ok');
+    showToast('Log summary & marked event windows attached', 'ok');
   });
 
   $('ai-attach-csv-btn').addEventListener('click', () => {
@@ -3792,6 +3815,8 @@ function buildFullSystemPromptForChat() {
     vehicleInfo: { ...state.vehicleInfo, dtcDescriptions: DTC_DESCRIPTIONS },
     activeProfile: payload.activeProfile,
     adapterInfo: payload.adapterInfo,
+    pidHealthTracker: payload.pidHealthTracker,
+    recordedPidIds: payload.recordedPidIds,
     baseline: payload.baseline,
     sessionPurpose: state.settings.sessionPurpose,
     userNotes: state.settings.userNotes,
