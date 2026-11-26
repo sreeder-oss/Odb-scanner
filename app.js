@@ -228,6 +228,33 @@ function persistProfileAndLayout() {
 // DOM Helper
 const $ = (id) => document.getElementById(id);
 
+function escapeHtml(val) {
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createEmptyVehicleInfo() {
+  return {
+    vin: null,
+    make: null,
+    year: null,
+    milOn: null,
+    dtcCount: null,
+    ignitionType: null,
+    monitors: [],
+    distanceWithMil: null,
+    warmupsSinceClear: null,
+    distanceSinceClear: null,
+    timeWithMil: null,
+    timeSinceClear: null,
+    dtcs: { stored: [], pending: [], permanent: [] },
+  };
+}
+
 function showToast(msg, variant = 'ok') {
   const container = $('toast-container');
   const el = document.createElement('div');
@@ -788,8 +815,8 @@ function applyPreset(presetId, { silent = false } = {}) {
   state.activePresetId = preset.id;
   state.driveScriptDone = new Set();
   state.driveScriptCollapsed = true;
+  state.cvtChecklistVisible = Boolean(preset.isCvtProfile);
   if (preset.isCvtProfile) {
-    state.cvtChecklistVisible = true;
     state.cvtChecklistCollapsed = true;
   }
 
@@ -1327,12 +1354,12 @@ function renderDashboard() {
         <button class="gauge-help-btn" type="button" aria-label="What does this mean?">?</button>
       </div>
       <div class="gauge-value-row">
-        <span class="gauge-value">${disp.text}</span>
-        <span class="gauge-unit">${cachedUnit}</span>
+        <span class="gauge-value">${escapeHtml(disp.text)}</span>
+        <span class="gauge-unit">${escapeHtml(cachedUnit)}</span>
       </div>
       <div class="gauge-bar-track"><div class="gauge-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
       <div class="gauge-footer">
-        <span class="gauge-minmax">min ${minText} / max ${maxText}</span>
+        <span class="gauge-minmax">min ${escapeHtml(minText)} / max ${escapeHtml(maxText)}</span>
         <button class="plot-toggle-btn ${isPlotted ? 'active' : ''}" type="button">${isPlotted ? 'Plotted' : 'Plot'}</button>
       </div>
     `;
@@ -1341,9 +1368,9 @@ function renderDashboard() {
     card.querySelector('.gauge-help-btn').addEventListener('click', () => {
       openModal(
         `${meta.name} (${meta.pidHex})`,
-        `<p>${meta.tooltip || 'Standard OBD-II diagnostic parameter.'}</p>
-         <p class="muted-meta">Unit: ${cachedUnit} · Normal range bar: ${disp.displayMin.toFixed(0)} to ${disp.displayMax.toFixed(0)} ${cachedUnit}</p>
-         ${meta.dependencies ? `<p class="muted-meta">Calculated from: ${meta.dependencies.join(' + ')}</p>` : ''}`
+        `<p>${escapeHtml(meta.tooltip || 'Standard OBD-II diagnostic parameter.')}</p>
+         <p class="muted-meta">Unit: ${escapeHtml(cachedUnit)} · Normal range bar: ${disp.displayMin.toFixed(0)} to ${disp.displayMax.toFixed(0)} ${escapeHtml(cachedUnit)}</p>
+         ${meta.dependencies ? `<p class="muted-meta">Calculated from: ${escapeHtml(meta.dependencies.join(' + '))}</p>` : ''}`
       );
     });
 
@@ -1418,11 +1445,11 @@ function renderVariables() {
       <div class="var-info">
         <div class="var-title"></div>
         <div class="var-meta">
-          <span class="mono">${pid.pidHex}</span>
+          <span class="mono">${escapeHtml(pid.pidHex)}</span>
           <span>·</span>
-          <span>${pid.unit}</span>
+          <span>${escapeHtml(pid.unit)}</span>
           <span>·</span>
-          <span class="${sup.cls}">${sup.text}</span>
+          <span class="${sup.cls}">${escapeHtml(sup.text)}</span>
         </div>
       </div>
       <button class="btn btn-sm ${onDash ? 'btn-primary' : 'btn-secondary'}" type="button">
@@ -1483,7 +1510,7 @@ function openCustomProfileEditor(existing = null) {
     if (isPidHiddenByBankRule(p)) continue;
     const lbl = document.createElement('label');
     lbl.className = 'pid-pick-item';
-    lbl.innerHTML = `<input type="checkbox" value="${p.pidHex}" ${selectedSet.has(p.pidHex) ? 'checked' : ''} /><span></span>`;
+    lbl.innerHTML = `<input type="checkbox" value="${escapeHtml(p.pidHex)}" ${selectedSet.has(p.pidHex) ? 'checked' : ''} /><span></span>`;
     lbl.querySelector('span').textContent = `${p.shortName} (${p.pidHex})`;
     lbl.querySelector('input').addEventListener('change', updateCustomProfilePidCount);
     picker.appendChild(lbl);
@@ -1523,11 +1550,11 @@ function renderPresets() {
 
     card.innerHTML = `
       <div>
-        <div class="preset-meta-line">${catLabel} · ${preset.pids.length} PIDs${preset.driveScript?.length ? ` · ${preset.driveScript.length} script steps` : ''}</div>
+        <div class="preset-meta-line">${escapeHtml(catLabel)} · ${preset.pids.length} PIDs${preset.driveScript?.length ? ` · ${preset.driveScript.length} script steps` : ''}</div>
         <h2></h2>
         <p class="subtext preset-blurb"></p>
         <p class="muted-meta preset-pids" style="margin-top:8px;"></p>
-        ${optNames ? `<p class="muted-meta" style="margin-top:4px;">Optional (MX+ likely needed): ${optNames}</p>` : ''}
+        ${optNames ? `<p class="muted-meta" style="margin-top:4px;">Optional (MX+ likely needed): ${escapeHtml(optNames)}</p>` : ''}
         ${exceedsCap ? `<p class="hint-err" style="font-size:0.8rem;margin-top:6px;">Exceeds current adapter cap (${preset.pids.length} &gt; ${state.pidCap}) — loading will warn and list trimmed PIDs.</p>` : ''}
       </div>
       <div class="preset-card-actions">
@@ -1605,7 +1632,7 @@ function renderVehicleProfile() {
     item.innerHTML = `
       <div>
         <strong></strong>
-        <div class="muted-meta">${car.mfrId} · ${car.engineId} · ${car.transId}${car.vin ? ` · VIN ${car.vin}` : ''}</div>
+        <div class="muted-meta">${escapeHtml(car.mfrId)} · ${escapeHtml(car.engineId)} · ${escapeHtml(car.transId)}${car.vin ? ` · VIN ${escapeHtml(car.vin)}` : ''}</div>
       </div>
       <div class="inline-actions" style="margin-top:0;">
         <button class="btn btn-sm btn-secondary load-car-btn" type="button">Load</button>
@@ -1642,13 +1669,13 @@ function renderDtcsView() {
   const metaEl = $('dtc-vehicle-meta');
   const makeYear = [info.make, info.year].filter(Boolean).join(' ') || 'Unknown';
   metaEl.innerHTML = `
-    <div class="kv-row"><dt>VIN</dt><dd class="mono">${info.vin || 'Not returned'}</dd></div>
-    <div class="kv-row"><dt>Decoded Make / Year</dt><dd>${makeYear}</dd></div>
+    <div class="kv-row"><dt>VIN</dt><dd class="mono">${escapeHtml(info.vin || 'Not returned')}</dd></div>
+    <div class="kv-row"><dt>Decoded Make / Year</dt><dd>${escapeHtml(makeYear)}</dd></div>
     <div class="kv-row"><dt>Check Engine Light (MIL)</dt><dd>${info.milOn === null ? '—' : info.milOn ? 'ON (Active)' : 'OFF'}</dd></div>
-    <div class="kv-row"><dt>ECU Reported DTC Count</dt><dd>${info.dtcCount ?? '—'}</dd></div>
-    <div class="kv-row"><dt>Distance With MIL On</dt><dd>${info.distanceWithMil !== null ? `${info.distanceWithMil} km` : '—'}</dd></div>
-    <div class="kv-row"><dt>Distance Since Codes Cleared</dt><dd>${info.distanceSinceClear !== null ? `${info.distanceSinceClear} km` : '—'}</dd></div>
-    <div class="kv-row"><dt>Warm-ups Since Cleared</dt><dd>${info.warmupsSinceClear ?? '—'}</dd></div>
+    <div class="kv-row"><dt>ECU Reported DTC Count</dt><dd>${escapeHtml(info.dtcCount ?? '—')}</dd></div>
+    <div class="kv-row"><dt>Distance With MIL On</dt><dd>${info.distanceWithMil !== null ? `${escapeHtml(info.distanceWithMil)} km` : '—'}</dd></div>
+    <div class="kv-row"><dt>Distance Since Codes Cleared</dt><dd>${info.distanceSinceClear !== null ? `${escapeHtml(info.distanceSinceClear)} km` : '—'}</dd></div>
+    <div class="kv-row"><dt>Warm-ups Since Cleared</dt><dd>${escapeHtml(info.warmupsSinceClear ?? '—')}</dd></div>
   `;
 
   // Recent clear alert (Requirement 13)
@@ -1672,7 +1699,7 @@ function renderDtcsView() {
       .map(
         (m) => `
         <div class="list-item-card">
-          <span>${m.name}</span>
+          <span>${escapeHtml(m.name)}</span>
           <span class="${m.ready ? 'support-yes' : 'gauge-tag-unverified'}">${m.ready ? 'Ready ✓' : 'Incomplete'}</span>
         </div>`
       )
@@ -1683,13 +1710,13 @@ function renderDtcsView() {
   const renderList = (elId, codes, emptyLabel) => {
     const el = $(elId);
     if (!codes || codes.length === 0) {
-      el.innerHTML = `<p class="subtext">${emptyLabel}</p>`;
+      el.innerHTML = `<p class="subtext">${escapeHtml(emptyLabel)}</p>`;
       return;
     }
     el.innerHTML = codes
       .map((code) => {
         const desc = DTC_DESCRIPTIONS[code] || 'Standard OBD-II trouble code (look up manufacturer details)';
-        return `<div class="dtc-item"><div class="dtc-code">${code}</div><div class="dtc-desc">${desc}</div></div>`;
+        return `<div class="dtc-item"><div class="dtc-code">${escapeHtml(code)}</div><div class="dtc-desc">${escapeHtml(desc)}</div></div>`;
       })
       .join('');
   };
@@ -1716,7 +1743,7 @@ function renderCustomPids() {
       <div>
         <strong></strong>
         <div class="muted-meta">
-          <span class="mono">${p.header || '7DF'} → ${p.request}</span> · <code>${p.formula}</code> · ${p.unit} · tag: ${p.tag}
+          <span class="mono">${escapeHtml(p.header || '7DF')} → ${escapeHtml(p.request)}</span> · <code>${escapeHtml(p.formula)}</code> · ${escapeHtml(p.unit)} · tag: ${escapeHtml(p.tag)}
           ${p.unverified ? ' · <span class="gauge-tag-unverified">unverified — confirm on your car</span>' : ''}
         </div>
       </div>
@@ -1863,7 +1890,7 @@ function renderExportView() {
 
   $('export-summary-kv').innerHTML = `
     <div class="kv-row"><dt>Data Source</dt><dd>${payload.isSimulatedSession ? 'SIMULATED' : 'Real Adapter'}</dd></div>
-    <div class="kv-row"><dt>Diagnostic Profile</dt><dd>${payload.activeProfile ? payload.activeProfile.name : 'Custom layout'}</dd></div>
+    <div class="kv-row"><dt>Diagnostic Profile</dt><dd>${escapeHtml(payload.activeProfile ? payload.activeProfile.name : 'Custom layout')}</dd></div>
     <div class="kv-row"><dt>Samples Recorded (AI CSV)</dt><dd>${payload.records.length} raw (${aiRows.length} AI-sized)</dd></div>
     <div class="kv-row"><dt>Duration</dt><dd>${durationS} s</dd></div>
     <div class="kv-row"><dt>Sampling Rate</dt><dd>${payload.samplingRateHz.toFixed(2)} Hz</dd></div>
@@ -1873,7 +1900,7 @@ function renderExportView() {
   const t0 = payload.records[0]?.ts || Date.now();
   $('marked-moments-summary').innerHTML = marks.length
     ? '<strong>Marked moments:</strong>' +
-      marks.map((m) => `<div>t+${((m.ts - t0) / 1000).toFixed(1)}s — ${m.event}</div>`).join('')
+      marks.map((m) => `<div>t+${((m.ts - t0) / 1000).toFixed(1)}s — ${escapeHtml(m.event)}</div>`).join('')
     : '<span class="muted-meta">No moments marked yet during this session.</span>';
 
   // Baseline status & comparisons
@@ -1890,7 +1917,7 @@ function renderExportView() {
       deltaList.innerHTML = comps
         .map((c) => {
           const sign = c.deltaAvg >= 0 ? '+' : '';
-          return `<div class="baseline-delta-row"><strong>${c.name} (${c.pidHex})</strong><span class="tabular">Now ${c.currentAvg.toFixed(c.decimals)} vs Base ${c.baselineAvg.toFixed(c.decimals)} ${c.unit} (${sign}${c.deltaAvg.toFixed(c.decimals)})</span></div>`;
+          return `<div class="baseline-delta-row"><strong>${escapeHtml(c.name)} (${escapeHtml(c.pidHex)})</strong><span class="tabular">Now ${c.currentAvg.toFixed(c.decimals)} vs Base ${c.baselineAvg.toFixed(c.decimals)} ${escapeHtml(c.unit)} (${sign}${c.deltaAvg.toFixed(c.decimals)})</span></div>`;
         })
         .join('');
     }
@@ -2350,6 +2377,13 @@ async function startRealConnection(type) {
     await disconnectSession();
     setConnectingUi(true);
   }
+  if (state.isSimulatedSession) {
+    newSession();
+    state.isSimulatedSession = false;
+  }
+  state.vehicleInfo = createEmptyVehicleInfo();
+  state.supportedPids = null;
+  state.supportedPidsComplete = false;
   state.disconnectedNotice = '';
   state.dongleReminderUntil = 0;
   state.logs = [];
@@ -2937,6 +2971,7 @@ async function runRealPollingLoop(elm) {
 // Simulator Mode (Requirement 22)
 async function startSimulator() {
   await disconnectSession();
+  newSession();
   const scenarioId = $('sim-scenario-select').value;
   const sim = new VehicleSimulator(scenarioId);
   state.simulator = sim;

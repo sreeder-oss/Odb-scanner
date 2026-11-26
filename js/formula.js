@@ -10,9 +10,12 @@ const FUNCTIONS = {
     return v > 127 ? v - 256 : v;
   },
   s16: (args) => {
-    if (args.length !== 1) throw new Error('s16() expects 1 argument');
-    const v = Math.trunc(args[0]) & 0xffff;
-    return v > 32767 ? v - 65536 : v;
+    if (args.length !== 1 && args.length !== 2) throw new Error('s16() expects 1 or 2 arguments');
+    const raw =
+      args.length === 2
+        ? ((Math.trunc(args[0]) & 0xff) << 8) | (Math.trunc(args[1]) & 0xff)
+        : Math.trunc(args[0]) & 0xffff;
+    return raw > 32767 ? raw - 65536 : raw;
   },
   min: (args) => {
     if (args.length < 1) throw new Error('min() expects at least 1 argument');
@@ -168,8 +171,11 @@ export function compileFormula(formulaStr) {
           }
         }
         consume(')');
-        if ((lower === 's8' || lower === 's16' || lower === 'abs') && args.length !== 1) {
+        if ((lower === 's8' || lower === 'abs') && args.length !== 1) {
           throw new Error(`${lower}() requires exactly 1 argument`);
+        }
+        if (lower === 's16' && args.length !== 1 && args.length !== 2) {
+          throw new Error('s16() requires 1 or 2 arguments (e.g. s16(A,B) or s16(A*256+B))');
         }
         if ((lower === 'min' || lower === 'max') && args.length < 1) {
           throw new Error(`${lower}() requires at least 1 argument`);

@@ -131,8 +131,8 @@ export function inspectObdReply(raw, requestHex) {
 
     for (const bytes of candidates) {
       if (bytes[0] !== expectedRespService) {
-        // Check if another OBD-II service reply arrived out of order (e.g. 41xx vs 43/47/49)
-        if (bytes[0] >= 0x41 && bytes[0] <= 0x4f) {
+        // Check if another OBD-II / UDS service reply arrived out of order (0x41..0x6F covers Modes 01..2F)
+        if (bytes[0] >= 0x41 && bytes[0] <= 0x6f) {
           mismatchedReplyHex = bytes
             .slice(0, Math.min(2, bytes.length))
             .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
