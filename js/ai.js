@@ -27,10 +27,11 @@ export const AI_PROVIDERS = {
   openrouter: {
     id: 'openrouter',
     label: 'OpenRouter (DeepSeek)',
-    defaultModel: 'deepseek/deepseek-v4.1-flash',
+    defaultModel: 'deepseek/deepseek-v4.1-flash-1017',
     models: [
-      { id: 'deepseek/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
       { id: 'deepseek/deepseek-v4.1-flash-1017', label: 'DeepSeek V4.1 Flash (1017)' },
+      { id: 'deepseek/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
+      { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat (V3)' },
     ],
   },
 };
@@ -44,6 +45,29 @@ const KEY_ANTHROPIC = 'bayscope_ai_key_anthropic_v1';
 const KEY_GEMINI = 'bayscope_ai_key_gemini_v1';
 const KEY_OPENROUTER = 'bayscope_ai_key_openrouter_v1';
 const KEY_PRIVACY_ACK = 'bayscope_ai_privacy_ack_v1';
+
+// Strip accidental "Bearer " prefix, surrounding quotes, zero-width characters, and whitespace when pasting on phone/desktop
+export function sanitizeApiKey(rawKey) {
+  let s = String(rawKey || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+  s = s.replace(/^["'`]+|["'`]+$/g, '').trim();
+  if (/^bearer\s+/i.test(s)) {
+    s = s.replace(/^bearer\s+/i, '').trim();
+  }
+  s = s.replace(/^["'`]+|["'`]+$/g, '').trim();
+  // API keys never contain internal spaces or newlines
+  s = s.replace(/\s+/g, '');
+  return s;
+}
+
+export function detectProviderFromKey(cleanKey) {
+  const k = sanitizeApiKey(cleanKey);
+  if (k.startsWith('sk-or-')) return 'openrouter';
+  if (k.startsWith('sk-ant-')) return 'anthropic';
+  if (/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) return 'gemini';
+  return null;
+}
 
 function getKeyStorageSlot(provider) {
   if (provider === 'gemini') return KEY_GEMINI;
@@ -62,9 +86,9 @@ export function loadAiConfig() {
     provider,
     model,
     keys: {
-      anthropic: localStorage.getItem(KEY_ANTHROPIC) || '',
-      gemini: localStorage.getItem(KEY_GEMINI) || '',
-      openrouter: localStorage.getItem(KEY_OPENROUTER) || '',
+      anthropic: sanitizeApiKey(localStorage.getItem(KEY_ANTHROPIC) || ''),
+      gemini: sanitizeApiKey(localStorage.getItem(KEY_GEMINI) || ''),
+      openrouter: sanitizeApiKey(localStorage.getItem(KEY_OPENROUTER) || ''),
     },
     privacyAck: localStorage.getItem(KEY_PRIVACY_ACK) === '1',
   };
@@ -80,13 +104,60 @@ export function saveAiProviderAndModel(provider, model) {
 }
 
 export function saveAiKey(provider, keyStr) {
-  const trimmed = String(keyStr || '').trim();
+  const cleaned = sanitizeApiKey(keyStr);
   const storageKey = getKeyStorageSlot(provider);
-  if (trimmed) {
-    localStorage.setItem(storageKey, trimmed);
+  if (cleaned) {
+    localStorage.setItem(storageKey, cleaned);
   } else {
     localStorage.removeItem(storageKey);
   }
+  return cleaned;
+}
+
+// Build a hash-fragment pairing link (#pair_ai=...) so the API key never leaves the browser in HTTP requests
+export function buildAiPairingUrl({ baseUrl, provider, model, apiKey }) {
+  const cleanKey = sanitizeApiKey(apiKey);
+  if (!cleanKey) {
+    throw new Error('Save or paste an API key first before generating a phone QR code.');
+  }
+  const cleanBase = String(baseUrl || '').split('#')[0];
+  const params = new URLSearchParams();
+  params.set('p', provider);
+  if (model) params.set('m', model);
+  params.set('k', cleanKey);
+  return `${cleanBase}#pair_ai=${params.toString()}`;
+}
+
+// Check URL hash on startup for #pair_ai=..., import key & provider into localStorage, and scrub URL bar immediately
+export function consumeAiPairingHash() {
+  if (typeof window === 'undefined' || !window.location.hash) return null;
+  const rawHash = window.location.hash.replace(/^#/, '');
+  if (!rawHash.startsWith('pair_ai=')) return null;
+
+  const queryPart = rawHash.slice('pair_ai='.length);
+  const params = new URLSearchParams(queryPart);
+  const rawKey = sanitizeApiKey(params.get('k') || '');
+  const detected = detectProviderFromKey(rawKey);
+  const requestedProv = params.get('p') || detected || 'openrouter';
+  const validProv = AI_PROVIDERS[requestedProv] ? requestedProv : (detected || 'openrouter');
+  const requestedModel = params.get('m') || AI_PROVIDERS[validProv].defaultModel;
+
+  // Immediately strip the hash from the browser URL bar & history so the key cannot be bookmarked or leaked
+  try {
+    const cleanUrl = window.location.pathname + window.location.search;
+    window.history.replaceState(null, '', cleanUrl);
+  } catch {}
+
+  if (!rawKey) return null;
+
+  const saved = saveAiProviderAndModel(validProv, requestedModel);
+  saveAiKey(saved.provider, rawKey);
+  setPrivacyAck();
+  return {
+    provider: saved.provider,
+    model: saved.model,
+    providerLabel: AI_PROVIDERS[saved.provider].label,
+  };
 }
 
 export function clearAiKey(provider) {
@@ -298,12 +369,6 @@ export function buildCompactStatsTable(stats) {
 
 function formatHttpError(provider, status, rawBody) {
   const provName = getProviderDisplayName(provider);
-  if (status === 401) {
-    return `API key rejected by ${provName}. Check the key in Settings.`;
-  }
-  if (status === 429) {
-    return `Rate limited by ${provName}. Wait a moment and try again.`;
-  }
   let detail = '';
   try {
     const parsed = JSON.parse(rawBody);
@@ -312,6 +377,16 @@ function formatHttpError(provider, status, rawBody) {
     detail = rawBody;
   }
   const snippet = String(detail || '').trim().slice(0, 260);
+
+  if (status === 401) {
+    return `API key rejected by ${provName}${snippet ? ` (${snippet})` : ''}. Check that Provider matches your key (OpenRouter keys start with sk-or-v1-).`;
+  }
+  if (status === 402) {
+    return `${provName} credits/billing error (HTTP 402)${snippet ? `: ${snippet}` : '. Add credits in your OpenRouter account.'}`;
+  }
+  if (status === 429) {
+    return `Rate limited by ${provName}${snippet ? ` (${snippet})` : ''}. Wait a moment and try again.`;
+  }
   return `${provName} HTTP ${status}${snippet ? `: ${snippet}` : ''}`;
 }
 
@@ -328,10 +403,10 @@ function formatNetworkOrCorsError(provider, err) {
 
 // Test connection with a minimal non-streaming request
 export async function testAiConnection({ provider, model, apiKey }) {
-  if (!apiKey || !apiKey.trim()) {
+  const key = sanitizeApiKey(apiKey);
+  if (!key) {
     throw new Error('No API key entered for this provider.');
   }
-  const key = apiKey.trim();
 
   try {
     if (provider === 'anthropic') {
@@ -358,6 +433,17 @@ export async function testAiConnection({ provider, model, apiKey }) {
     }
 
     if (provider === 'openrouter') {
+      // First verify the OpenRouter key itself against /api/v1/auth/key so we can distinguish
+      // a bad/revoked key vs a model/credits issue clearly!
+      const authRes = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      if (!authRes.ok) {
+        const authText = await authRes.text().catch(() => '');
+        throw new Error(formatHttpError('openrouter', authRes.status, authText));
+      }
+
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -399,7 +485,13 @@ export async function testAiConnection({ provider, model, apiKey }) {
     }
     return `Connected to ${getModelDisplayName('gemini', model)}.`;
   } catch (err) {
-    if (err.message && (err.message.includes('HTTP ') || err.message.includes('API key rejected') || err.message.includes('Rate limited'))) {
+    if (
+      err.message &&
+      (err.message.includes('HTTP ') ||
+        err.message.includes('API key rejected') ||
+        err.message.includes('credits/billing') ||
+        err.message.includes('Rate limited'))
+    ) {
       throw err;
     }
     throw new Error(formatNetworkOrCorsError(provider, err));
@@ -416,10 +508,10 @@ export async function streamAiChat({
   signal,
   onDelta,
 }) {
-  if (!apiKey || !apiKey.trim()) {
+  const key = sanitizeApiKey(apiKey);
+  if (!key) {
     throw new Error(`No API key configured for ${getProviderDisplayName(provider)}.`);
   }
-  const key = apiKey.trim();
 
   let res;
   try {

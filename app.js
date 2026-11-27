@@ -57,18 +57,23 @@ import {
 import {
   AI_PROVIDERS,
   SYSTEM_PROMPT_BASE,
+  buildAiPairingUrl,
   buildCompactStatsTable,
   buildSessionContextObject,
   clearAiKey,
   clearAllAiStorage,
+  consumeAiPairingHash,
+  detectProviderFromKey,
   getModelDisplayName,
   loadAiConfig,
+  sanitizeApiKey,
   saveAiKey,
   saveAiProviderAndModel,
   setPrivacyAck,
   streamAiChat,
   testAiConnection,
 } from './js/ai.js';
+import { renderQrCodeSvg } from './js/qr.js';
 import { GUIDE_CHAPTERS, VIEW_LABELS } from './js/guide.js';
 
 const SETTINGS_KEY = 'bayscope_settings_v1';
@@ -3711,8 +3716,21 @@ function bindEvents() {
   });
 
   const persistActiveKeyFromInput = ({ showFeedback = false } = {}) => {
-    const prov = state.aiConfig.provider;
-    const val = $('ai-api-key-input').value.trim();
+    const rawInput = $('ai-api-key-input').value;
+    const val = sanitizeApiKey(rawInput);
+    let prov = state.aiConfig.provider;
+    let autoSwitched = false;
+
+    // Auto-detect provider from key prefix so pasting sk-or-... while Anthropic is selected never 401-rejects!
+    const detectedProv = detectProviderFromKey(val);
+    if (detectedProv && detectedProv !== prov) {
+      const saved = saveAiProviderAndModel(detectedProv, AI_PROVIDERS[detectedProv].defaultModel);
+      prov = saved.provider;
+      state.aiConfig.provider = saved.provider;
+      state.aiConfig.model = saved.model;
+      autoSwitched = true;
+    }
+
     saveAiKey(prov, val);
     state.aiConfig.keys[prov] = val;
     if (val && navigator.storage?.persist) {
@@ -3720,18 +3738,64 @@ function bindEvents() {
     }
     renderAiSettings();
     renderAiChatView();
-    if (showFeedback) {
+    if (autoSwitched) {
+      showToast(`Detected ${AI_PROVIDERS[prov].label} key — switched provider automatically`, 'ok');
+    } else if (showFeedback) {
       if (val) {
         showToast(`Saved ${AI_PROVIDERS[prov].label} API key in this browser`, 'ok');
       } else {
         showToast(`Cleared empty ${AI_PROVIDERS[prov].label} API key`, 'warn');
       }
     }
+    return { prov, val };
   };
 
   $('ai-api-key-input').addEventListener('input', () => persistActiveKeyFromInput({ showFeedback: false }));
   $('ai-api-key-input').addEventListener('change', () => persistActiveKeyFromInput({ showFeedback: false }));
   $('ai-save-key-btn')?.addEventListener('click', () => persistActiveKeyFromInput({ showFeedback: true }));
+
+  $('ai-pair-qr-btn')?.addEventListener('click', () => {
+    persistActiveKeyFromInput({ showFeedback: false });
+    const prov = state.aiConfig.provider;
+    const model = state.aiConfig.model;
+    const key = state.aiConfig.keys[prov];
+    if (!key) {
+      showToast(`Paste & save your ${AI_PROVIDERS[prov].label} API key first, then tap Pair key to phone (QR).`, 'warn');
+      return;
+    }
+
+    let pairUrl = '';
+    let svgHtml = '';
+    try {
+      const baseUrl = window.location.origin + window.location.pathname;
+      pairUrl = buildAiPairingUrl({ baseUrl, provider: prov, model, apiKey: key });
+      svgHtml = renderQrCodeSvg(pairUrl, { pixelSize: 250 });
+    } catch (err) {
+      svgHtml = `<p class="hint-err">${escapeHtml(err.message)}</p>`;
+    }
+
+    const provLabel = AI_PROVIDERS[prov]?.label || prov;
+    const modelLabel = getModelDisplayName(prov, model);
+    openModal(
+      'Scan on Your Phone to Pair API Key',
+      `<p>Point your phone's camera at this QR code and tap the link in <strong>Chrome</strong>. It automatically selects <strong>${escapeHtml(provLabel)} (${escapeHtml(modelLabel)})</strong>, saves your key in your phone's storage, and strips the key from the URL bar immediately.</p>
+       <div style="display:flex;justify-content:center;padding:12px;background:#fff;border-radius:10px;width:fit-content;margin:12px auto;">
+         ${svgHtml}
+       </div>
+       <p class="muted-meta" style="text-align:center;">Generated 100% locally in your browser — your key is placed in a <code>#hash</code> fragment so it is never sent to GitHub or any QR server. Keep this QR private.</p>
+       <div class="inline-actions" style="justify-content:center;">
+         <button id="copy-ai-pair-link-btn" class="btn btn-secondary btn-sm" type="button">Copy pairing link</button>
+         <button id="close-ai-pair-qr-btn" class="btn btn-primary btn-sm" type="button">Done</button>
+       </div>`
+    );
+
+    $('copy-ai-pair-link-btn')?.addEventListener('click', () => {
+      if (pairUrl) {
+        copyText(pairUrl, 'One-tap phone pairing link copied — open it in Chrome on your phone');
+      }
+    });
+    $('close-ai-pair-qr-btn')?.addEventListener('click', closeModal);
+  });
 
   $('ai-toggle-key-btn').addEventListener('click', () => {
     const inp = $('ai-api-key-input');
@@ -3766,15 +3830,9 @@ function bindEvents() {
   });
 
   $('ai-test-conn-btn').addEventListener('click', async () => {
+    persistActiveKeyFromInput({ showFeedback: false });
     const prov = state.aiConfig.provider;
     const model = state.aiConfig.model;
-    const inputVal = $('ai-api-key-input').value.trim();
-    if (inputVal && inputVal !== state.aiConfig.keys[prov]) {
-      saveAiKey(prov, inputVal);
-      state.aiConfig.keys[prov] = inputVal;
-      renderAiSettings();
-      renderAiChatView();
-    }
     const key = state.aiConfig.keys[prov];
     const hint = $('ai-test-result');
 
@@ -3992,6 +4050,14 @@ function init() {
   rebuildPidMap();
   loadSavedState();
 
+  const pairedFromQr = consumeAiPairingHash();
+  if (pairedFromQr) {
+    state.aiConfig = loadAiConfig();
+    if (navigator.storage?.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+  }
+
   // Populate simulator scenarios
   $('sim-scenario-select').innerHTML = SIM_SCENARIOS.map(
     (s) => `<option value="${s.id}">${s.name}</option>`
@@ -4009,6 +4075,23 @@ function init() {
   renderAiSettings();
   renderAiChatView();
   renderDashboard();
+
+  if (pairedFromQr) {
+    switchView('ai');
+    showToast(`Paired & saved ${pairedFromQr.providerLabel} key on this device!`, 'ok');
+  }
+
+  // Listen for hashchange too in case user opens a pairing link in an already-open tab
+  window.addEventListener('hashchange', () => {
+    const paired = consumeAiPairingHash();
+    if (paired) {
+      state.aiConfig = loadAiConfig();
+      renderAiSettings();
+      renderAiChatView();
+      switchView('ai');
+      showToast(`Paired & saved ${paired.providerLabel} key on this device!`, 'ok');
+    }
+  });
 
   // Clear any legacy cached protocol key from earlier builds so every connect starts fresh
   try {

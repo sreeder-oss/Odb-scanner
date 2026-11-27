@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bayscope-shell-v21';
+const CACHE_NAME = 'bayscope-shell-v22';
 
 const APP_SHELL_ASSETS = [
   './',
@@ -14,6 +14,7 @@ const APP_SHELL_ASSETS = [
   './js/simulator.js',
   './js/export.js',
   './js/ai.js',
+  './js/qr.js',
   './js/guide.js',
   './icons/icon.svg',
   './icons/icon-192.png',
