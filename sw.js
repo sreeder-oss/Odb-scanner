@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bayscope-shell-v20';
+const CACHE_NAME = 'bayscope-shell-v21';
 
 const APP_SHELL_ASSETS = [
   './',

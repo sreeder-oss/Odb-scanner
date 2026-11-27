@@ -3710,13 +3710,28 @@ function bindEvents() {
     renderAiChatView();
   });
 
-  $('ai-api-key-input').addEventListener('input', (e) => {
+  const persistActiveKeyFromInput = ({ showFeedback = false } = {}) => {
     const prov = state.aiConfig.provider;
-    const val = e.target.value.trim();
+    const val = $('ai-api-key-input').value.trim();
     saveAiKey(prov, val);
     state.aiConfig.keys[prov] = val;
+    if (val && navigator.storage?.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+    renderAiSettings();
     renderAiChatView();
-  });
+    if (showFeedback) {
+      if (val) {
+        showToast(`Saved ${AI_PROVIDERS[prov].label} API key in this browser`, 'ok');
+      } else {
+        showToast(`Cleared empty ${AI_PROVIDERS[prov].label} API key`, 'warn');
+      }
+    }
+  };
+
+  $('ai-api-key-input').addEventListener('input', () => persistActiveKeyFromInput({ showFeedback: false }));
+  $('ai-api-key-input').addEventListener('change', () => persistActiveKeyFromInput({ showFeedback: false }));
+  $('ai-save-key-btn')?.addEventListener('click', () => persistActiveKeyFromInput({ showFeedback: true }));
 
   $('ai-toggle-key-btn').addEventListener('click', () => {
     const inp = $('ai-api-key-input');
@@ -3731,6 +3746,7 @@ function bindEvents() {
     state.aiConfig.keys[prov] = '';
     $('ai-api-key-input').value = '';
     $('ai-test-result').textContent = '';
+    renderAiSettings();
     renderAiChatView();
     showToast(`Cleared ${AI_PROVIDERS[prov].label} API key`, 'ok');
   });
@@ -3752,6 +3768,13 @@ function bindEvents() {
   $('ai-test-conn-btn').addEventListener('click', async () => {
     const prov = state.aiConfig.provider;
     const model = state.aiConfig.model;
+    const inputVal = $('ai-api-key-input').value.trim();
+    if (inputVal && inputVal !== state.aiConfig.keys[prov]) {
+      saveAiKey(prov, inputVal);
+      state.aiConfig.keys[prov] = inputVal;
+      renderAiSettings();
+      renderAiChatView();
+    }
     const key = state.aiConfig.keys[prov];
     const hint = $('ai-test-result');
 
@@ -3786,15 +3809,30 @@ function renderAiSettings() {
     .map((m) => `<option value="${m.id}">${m.label}</option>`)
     .join('');
   $('ai-model-select').value = model;
-  $('ai-key-provider-label').textContent =
+  const provLabel =
     provider === 'gemini'
       ? 'Google Gemini'
       : provider === 'openrouter'
         ? 'OpenRouter'
         : 'Anthropic';
+  $('ai-key-provider-label').textContent = provLabel;
   $('ai-api-key-input').placeholder =
     provider === 'openrouter' ? 'Paste your OpenRouter API key (sk-or-…)' : 'Paste your API key';
-  $('ai-api-key-input').value = keys[provider] || '';
+  const savedKey = keys[provider] || '';
+  if ($('ai-api-key-input').value !== savedKey) {
+    $('ai-api-key-input').value = savedKey;
+  }
+  const statusEl = $('ai-key-saved-status');
+  if (statusEl) {
+    if (savedKey) {
+      const tail = savedKey.length >= 4 ? `…${savedKey.slice(-4)}` : 'saved';
+      statusEl.textContent = `Saved in this browser ✓ (${tail})`;
+      statusEl.className = 'field-hint hint-ok';
+    } else {
+      statusEl.textContent = `No ${provLabel} key saved in this browser yet.`;
+      statusEl.className = 'field-hint';
+    }
+  }
 }
 
 // Render AI Chat View
